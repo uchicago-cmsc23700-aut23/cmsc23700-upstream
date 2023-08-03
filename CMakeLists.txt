@@ -85,12 +85,6 @@ configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/cs237-library/include/cs237-config.h
   @ONLY)
 
-# cs237 library
-#
-add_subdirectory(cs237-library)
-set(CS237_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/cs237-library/include)
-set(CS237_DOXYGEN_HTML_DIR ${CMAKE_SOURCE_DIR}/cs237-library/doc)
-
 if (CS237_ENABLE_DOXYGEN)
   message(STATUS "Doxygen enabled.")
   find_package(Doxygen REQUIRED)
@@ -103,13 +97,13 @@ endif()
 include_directories(
   ${GLFW_INCLUDE_DIR}
   ${GLM_INCLUDE_DIR}
-  ${VULKAN_INCLUDE_DIR}
+  ${Vulkan_INCLUDE_DIR}
   ${PNG_INCLUDE_DIR}
   ${CS237_INCLUDE_DIR})
 
 # libraries
 link_libraries(${PNG_LIBRARY})
-link_libraries(${VULKAN_LIBRARY})
+link_libraries(${Vulkan_LIBRARY})
 link_libraries(${GLFW_LIBRARY})
 
 # on Linux, we need X11
@@ -117,6 +111,12 @@ if (${CMAKE_HOST_LINUX})
 include_directories(${X11_INCLUDE_DIR})
 link_libraries(${X11_LIBRARIES})
 endif()
+
+# cs237 library
+#
+add_subdirectory(cs237-library)
+set(CS237_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/cs237-library/include)
+set(CS237_DOXYGEN_HTML_DIR ${CMAKE_SOURCE_DIR}/cs237-library/doc)
 
 # the subdirectory for the labs
 #
