@@ -2,10 +2,10 @@
 *.d
 
 # Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+build/**/*.slo
+build/**/*.lo
+build/**/*.o
+build/**/*.obj
 
 # Precompiled Headers
 *.gch
@@ -30,3 +30,16 @@
 *.exe
 *.out
 *.app
+
+# clangd cache
+.cache
+
+# Compiled shader programs
+*.spv
+
+# repo-specific stuff
+build/*
+cs237-library/include/cs237-config.h
+
+# macOS Finder
+.DS_Store
