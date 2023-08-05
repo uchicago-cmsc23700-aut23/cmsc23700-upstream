@@ -14,5 +14,5 @@ if (NOT HAVE_STRNCASECMP)
   check_include_file(strings.h INCLUDE_STRINGS_H)
   if (INCLUDE_STRINGS_H)
     check_symbol_exists (strncasecmp INCLUDE_STRINGS_H HAVE_STRNCASECMP)
-  endif
+  endif()
 endif()
