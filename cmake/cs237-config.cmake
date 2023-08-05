@@ -4,6 +4,9 @@
 # All rights reserved.
 #
 
+include(CheckIncludeFile)
+include(CheckSymbolExists)
+
 set(CS237_BINARY_DIR ${CMAKE_BINARY_DIR})
 set(CS237_SOURCE_DIR ${CMAKE_SOURCE_DIR})
 
