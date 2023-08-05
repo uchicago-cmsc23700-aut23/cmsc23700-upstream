@@ -23,6 +23,12 @@ extern "C" {
 //! the path to the root of the source directory
 #cmakedefine CS237_SOURCE_DIR "@CS237_SOURCE_DIR@"
 
+//! if <strings.h> is available and needed for strncasecmp
+#cmakedefine INCLUDE_STRINGS_H <strings.h>
+
+//! is strncasecmp available?
+#cmakedefine HAVE_STRNCASECMP
+
 #ifdef __cplusplus
 }
 #endif // C++
