@@ -19,6 +19,9 @@
 #include <iostream>
 #include <fstream>
 #include <cctype>
+#ifdef INCLUDE_STRINGS_H
+#include <strings.h>
+#endif
 
 namespace json {
 

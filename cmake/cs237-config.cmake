@@ -12,10 +12,9 @@ set(CS237_SOURCE_DIR ${CMAKE_SOURCE_DIR})
 
 # on Linux systems, we need <strings.h> for strcasencmp
 #
-check_symbol_exists (strncasecmp HAVE_STRNCASECMP)
-if (NOT HAVE_STRNCASECMP)
-  check_include_file(strings.h INCLUDE_STRINGS_H)
-  if (INCLUDE_STRINGS_H)
-    check_symbol_exists (strncasecmp INCLUDE_STRINGS_H HAVE_STRNCASECMP)
-  endif()
+check_include_file(strings.h INCLUDE_STRINGS_H)
+if (INCLUDE_STRINGS_H)
+  check_symbol_exists (strncasecmp "strings.h" HAVE_STRNCASECMP)
+else()
+#  check_symbol_exists (strncasecmp "" HAVE_STRNCASECMP)
 endif()
