@@ -15,16 +15,33 @@
  * All rights reserved.
  */
 
+#include "cs237-config.h"
 #include "json.hpp"
 #include <iostream>
 #include <fstream>
 #include <cctype>
 #ifdef INCLUDE_STRINGS_H
-#include <strings.h>
+#include INCLUDE_STRINGS_H
 #endif
 
-namespace json {
+#ifndef HAVE_STRNCASECMP
+static int strncasecmp (const char *s1, const char *s2, size_t n)
+{
+    for (int i = 0;  i < n;  ++i) {
+        int c1 = tolower(s1[i]);
+        int c2 = tolower(s2[i]);
+        if ((c1 == 0) || (c2 == 0)) {
+            // if s1 is longer than s2, then c2 == 0, so c1 - c2 > 0, whereas
+            // if s1 is shorter, then c1 == 0, so c1 - c2 < 0.
+            return (c1 - c2);
+        } else if (c1 != c2) {
+            return (c1 - c2);
+        }
+    }
+}
+#endif // !HAVE_STRNCASECMP
 
+namespace json {
 
 class Input {
   public:
