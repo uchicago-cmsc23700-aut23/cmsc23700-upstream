@@ -24,53 +24,55 @@ TextureBase::TextureBase (
 {
     void *data = img->data();
     size_t nBytes = img->nBytes();
-    VkFormat fmt = img->format();
+    vk::Format fmt = img->format();
 
     this->_img = app->_createImage (
         wid, ht, fmt,
-        VK_IMAGE_TILING_OPTIMAL,
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+        vk::ImageTiling::eOptimal,
+        vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);
     this->_mem = app->_allocImageMemory(
         this->_img,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        vk::MemoryPropertyFlagBits::eDeviceLocal);
     this->_view = app->_createImageView(
         this->_img, fmt,
-        VK_IMAGE_ASPECT_COLOR_BIT);
+        vk::ImageAspectFlagBits::eColor);
 
     // create a staging buffer for copying the image
-    VkBuffer stagingBuf = this->_createBuffer (
-        nBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-    VkDeviceMemory stagingBufMem = this->_allocBufferMemory(
+    vk::Buffer stagingBuf = this->_createBuffer (
+        nBytes, vk::BufferUsageFlagBits::eTransferSrc);
+    vk::DeviceMemory stagingBufMem = this->_allocBufferMemory(
         stagingBuf,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        vk::MemoryPropertyFlagBits::eHostVisible
+            | vk::MemoryPropertyFlagBits::eHostCoherent);
 
     // copy the image data to the staging buffer
     void* stagingData;
-    vkMapMemory(app->_device, stagingBufMem, 0, nBytes, 0, &stagingData);
-    memcpy(stagingData, data, nBytes);
-    vkUnmapMemory(app->_device, stagingBufMem);
+    stagingData = app->_device.mapMemory(stagingBufMem, 0, nBytes, {});
+    ::memcpy(stagingData, data, nBytes);
+    app->_device.unmapMemory(stagingBufMem);
 
     app->_transitionImageLayout(
         this->_img, fmt,
-        VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eTransferDstOptimal);
     app->_copyBufferToImage(this->_img, stagingBuf, nBytes, wid, ht);
     app->_transitionImageLayout(
         this->_img, fmt,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        vk::ImageLayout::eTransferDstOptimal,
+        vk::ImageLayout::eShaderReadOnlyOptimal);
 
     // free up the staging buffer
-    vkFreeMemory(app->_device, stagingBufMem, nullptr);
-    vkDestroyBuffer(app->_device, stagingBuf, nullptr);
+    app->_device.freeMemory(stagingBufMem);
+    app->_device.destroyBuffer(stagingBuf);
 
 }
 
 TextureBase::~TextureBase ()
 {
-    vkDestroyImageView(this->_app->_device, this->_view, nullptr);
-    vkDestroyImage(this->_app->_device, this->_img, nullptr);
-    vkFreeMemory(this->_app->_device, this->_mem, nullptr);
+    this->_app->_device.destroyImageView(this->_view);
+    this->_app->_device.destroyImage(this->_img);
+    this->_app->_device.freeMemory(this->_mem);
+
 }
 
 } // namespce __detail

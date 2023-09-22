@@ -5,7 +5,9 @@
 #ifndef _OBJ_READER_HXX_
 #define _OBJ_READER_HXX_
 
-#include <glm/glm.hpp>
+#ifndef GLM_SETUP_INCLUDED
+#include "glm/glm.hpp"
+#endif
 
 /* OBJtriangle: Structure that defines a triangle in a model.
  */

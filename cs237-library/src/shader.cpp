@@ -39,72 +39,69 @@ static std::vector<char> _readFile (std::string const &name)
 }
 
 struct Stage {
-    Stage (VkDevice device, std::string const &file, ShaderKind k);
+    Stage (vk::Device device, std::string const &file, vk::ShaderStageFlagBits k);
 
-    VkPipelineShaderStageCreateInfo StageInfo ();
+    vk::PipelineShaderStageCreateInfo StageInfo ();
 
-    ShaderKind kind;
-    VkShaderModule module;
+    vk::ShaderStageFlagBits kind;
+    vk::ShaderModule module;
 };
 
-static struct {
+struct ShaderInfo {
     std::string suffix;
-    VkShaderStageFlagBits bit;
-} _stageInfo[] = {
-    { ".vert.spv", VK_SHADER_STAGE_VERTEX_BIT },
-    { ".geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT },
-    { ".tesc.spv", VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT },
-    { ".tese.spv", VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT },
-    { ".frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT },
-    { ".comp.spv", VK_SHADER_STAGE_COMPUTE_BIT },
+    vk::ShaderStageFlagBits bit;
 };
 
-Stage::Stage (VkDevice dev, std::string const &name, ShaderKind k)
+static std::array<ShaderInfo,5> _shaderInfo = {
+    ShaderInfo{ ".vert.spv", vk::ShaderStageFlagBits::eVertex },
+/* geometry shaders are not supported by the MoltenVK driver
+    { ".geom.spv", vk::ShaderStageFlagBits::eGeometry },
+*/
+    ShaderInfo{ ".tesc.spv", vk::ShaderStageFlagBits::eTessellationControl },
+    ShaderInfo{ ".tese.spv", vk::ShaderStageFlagBits::eTessellationEvaluation },
+    ShaderInfo{ ".frag.spv", vk::ShaderStageFlagBits::eFragment },
+    ShaderInfo{ ".comp.spv", vk::ShaderStageFlagBits::eCompute },
+};
+
+Stage::Stage (vk::Device dev, std::string const &name, vk::ShaderStageFlagBits k)
     : kind(k)
 {
     // get the code for the shader
     auto code = _readFile (name);
 
     // create the shader module
-    VkShaderModuleCreateInfo moduleInfo;
-    moduleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    moduleInfo.pNext = nullptr;
-    moduleInfo.flags = 0;
-    moduleInfo.codeSize = code.size();
-    moduleInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
-    VkShaderModule shModule;
-    if (vkCreateShaderModule(dev, &moduleInfo, nullptr, &this->module) != VK_SUCCESS) {
-        ERROR("unable to create shader module!");
-    }
+    vk::ShaderModuleCreateInfo moduleInfo(
+        {},
+        code.size(),
+        reinterpret_cast<const uint32_t*>(code.data()));
+
+    this->module = dev.createShaderModule(moduleInfo);
 
 }
 
-VkPipelineShaderStageCreateInfo Stage::StageInfo ()
+vk::PipelineShaderStageCreateInfo Stage::StageInfo ()
 {
     // info to specify the pipeline stage
-    VkPipelineShaderStageCreateInfo stageInfo{};
-    stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    stageInfo.pNext = nullptr;
-    stageInfo.flags = 0;
-    stageInfo.stage = _stageInfo[static_cast<int>(this->kind)].bit;
-    stageInfo.module = this->module;
-    stageInfo.pName = "main";
-    stageInfo.pSpecializationInfo = nullptr;
+    vk::PipelineShaderStageCreateInfo stageInfo(
+        {},
+        this->kind,
+        this->module,
+        "main",
+        nullptr);
 
     return stageInfo;
 }
 
-Shaders::Shaders (
-    VkDevice device,
-    std::string const &stem,
-    std::vector<ShaderKind> const &stages)
+Shaders::Shaders (vk::Device device, std::string const &stem, vk::ShaderStageFlags stages)
   : _device(device)
 {
     std::vector<Stage> stageVec;
-    stageVec.reserve(stages.size());
-    for (auto k : stages) {
-        std::string name = stem + _stageInfo[static_cast<int>(k)].suffix;
-        stageVec.push_back(Stage(device, name, k));
+
+    for (int i = 0;  i < _shaderInfo.size();  ++i) {
+        if (stages & _shaderInfo[i].bit) {
+            std::string name = stem + _shaderInfo[i].suffix;
+            stageVec.push_back(Stage(device, name, _shaderInfo[i].bit));
+        }
     }
 
     this->_stages.reserve(stageVec.size());
@@ -115,19 +112,24 @@ Shaders::Shaders (
 }
 
 Shaders::Shaders (
-    VkDevice device,
+    vk::Device device,
     std::vector<std::string> const &files,
-    std::vector<ShaderKind> const &stages)
+    vk::ShaderStageFlags stages)
   : _device(device)
 {
-    if (files.size() != stages.size()) {
-        ERROR("mismatch in number of files/stages");
+    std::vector<Stage> stageVec;
+    for (int i = 0, j = 0;  i < _shaderInfo.size();  ++i) {
+        if (stages & _shaderInfo[i].bit) {
+            if (j < files.size()) {
+                stageVec.push_back(Stage(device, files[j++], _shaderInfo[i].bit));
+            } else {
+                ERROR("more shader source files than shader stages");
+            }
+        }
     }
 
-    std::vector<Stage> stageVec;
-    stageVec.reserve(stages.size());
-    for (int i = 0;  i < stages.size();  ++i) {
-        stageVec.push_back(Stage(device, files[i], stages[i]));
+    if (files.size() != stageVec.size()) {
+        ERROR("mismatch in number of files/stages");
     }
 
     this->_stages.reserve(stageVec.size());
@@ -140,7 +142,7 @@ Shaders::Shaders (
 Shaders::~Shaders ()
 {
     for (auto stage : this->_stages) {
-        vkDestroyShaderModule (this->_device, stage.module, nullptr);
+        this->_device.destroyShaderModule(stage.module);
     }
 }
 

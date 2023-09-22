@@ -41,5 +41,5 @@ build/**/*.obj
 build/*
 cs237-library/include/cs237-config.h
 
-# macOS Finder
+# macOS
 .DS_Store

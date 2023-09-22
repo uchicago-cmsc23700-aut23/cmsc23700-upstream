@@ -26,16 +26,20 @@
 #include <vector>
 #include <algorithm>
 
-/* The GLFW and Vulkan library */
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-
 /* GLM include files; we include the extensions, such as transforms
  * and enable the experimental support for `to_string`
  */
-#include <glm/glm.hpp>
+#include "glm/glm.hpp"
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm/ext.hpp"
+
+/* The GLFW and Vulkan library */
+#define VULKAN_HPP_TYPESAFE_CONVERSION
+#include <vulkan/vulkan.hpp>
+
+/* The GLFW library */
+//#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
 
 namespace cs237 {
 

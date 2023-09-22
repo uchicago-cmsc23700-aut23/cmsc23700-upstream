@@ -21,13 +21,13 @@ namespace __detail {
 class TextureBase {
 public:
     //! return the image view for the texture
-    VkImageView view () const { return this->_view; }
+    vk::ImageView view () const { return this->_view; }
 
 protected:
     Application *_app;          //!< the owning application
-    VkImage _img;               //!< Vulkan image to hold the texture
-    VkDeviceMemory _mem;        //!< device memory for the texture image
-    VkImageView _view;          //!< image view for texture image
+    vk::Image _img;             //!< Vulkan image to hold the texture
+    vk::DeviceMemory _mem;      //!< device memory for the texture image
+    vk::ImageView _view;        //!< image view for texture image
 
     TextureBase (
         Application *app,
@@ -35,11 +35,11 @@ protected:
         cs237::__detail::ImageBase const *img);
     ~TextureBase ();
 
-    //! \brief create a VkBuffer object
+    //! \brief create a vk::Buffer object
     //! \param size   the size of the buffer in bytes
     //! \param usage  the usage of the buffer
     //! \return the allocated buffer
-    VkBuffer _createBuffer (size_t size, VkBufferUsageFlags usage)
+    vk::Buffer _createBuffer (size_t size, vk::BufferUsageFlags usage)
     {
         return this->_app->_createBuffer (size, usage);
     }
@@ -48,7 +48,7 @@ protected:
     //! \param buf    the buffer to allocate memory for
     //! \param props  requred memory properties
     //! \return the device memory that has been bound to the buffer
-    VkDeviceMemory _allocBufferMemory (VkBuffer buf, VkMemoryPropertyFlags props)
+    vk::DeviceMemory _allocBufferMemory (vk::Buffer buf, vk::MemoryPropertyFlags props)
     {
         return this->_app->_allocBufferMemory (buf, props);
     }

@@ -13,3 +13,11 @@
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
 add_subdirectory(src)
+
+if (CS237_ENABLE_DOXYGEN)
+  message(STATUS "Doxygen enabled.")
+  find_package(Doxygen REQUIRED)
+  if (DOXYGEN_FOUND)
+    add_subdirectory(doc)
+  endif()
+endif()

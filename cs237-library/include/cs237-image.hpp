@@ -53,7 +53,7 @@ std::string to_string (ChannelTy ty);
 namespace __detail {
 
     //! \brief convert an image format and channel type to a Vulkan image format
-    VkFormat toVkFormat (Channels chans, ChannelTy ty, bool sRGB);
+    vk::Format toVkFormat (Channels chans, ChannelTy ty, bool sRGB);
 
     class ImageBase {
     public:
@@ -64,7 +64,7 @@ namespace __detail {
         //! returns the type of the channels
         ChannelTy type () const { return this->_type; }
         //! return the vulkan format of the image data
-        VkFormat format () const { return toVkFormat(this->_chans, this->_type, this->_sRGB); }
+        vk::Format format () const { return toVkFormat(this->_chans, this->_type, this->_sRGB); }
         //! the data pointer
         void *data () const { return this->_data; }
         //! the total number of bytes of image data

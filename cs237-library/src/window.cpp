@@ -75,7 +75,7 @@ static void scrollCB (GLFWwindow *win, double xoffset, double yoffset)
 /******************** class Window methods ********************/
 
 Window::Window (Application *app, CreateWindowInfo const &info)
-    : _app(app), _win(nullptr), _swap(app->_device)
+    : _app(app), _win(nullptr), _surf(nullptr), _swap(app->_device)
 {
     glfwWindowHint(GLFW_RESIZABLE, info.resizable ? GLFW_TRUE : GLFW_FALSE);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -109,9 +109,11 @@ Window::Window (Application *app, CreateWindowInfo const &info)
     this->_scrollEnabled = false;
 
     // set up the Vulkan surface for the window
-    if (glfwCreateWindowSurface(app->_instance, window, nullptr, &this->_surf) != VK_SUCCESS) {
+    VkSurfaceKHR surf;
+    if (glfwCreateWindowSurface(app->_instance, window, nullptr, &surf) != VK_SUCCESS) {
         ERROR("unable to create window surface!");
     }
+    this->_surf = vk::SurfaceKHR(surf);
 
     // set up the swap chain for the surface
     this->_createSwapChain (info.depth, info.stencil);
@@ -124,7 +126,7 @@ Window::~Window ()
     this->_swap.cleanup ();
 
     // delete the surface
-    vkDestroySurfaceKHR (this->_app->_instance, this->_surf, nullptr);
+    this->_app->_instance.destroySurfaceKHR(this->_surf);
 
     glfwDestroyWindow (this->_win);
 }
@@ -233,25 +235,9 @@ Window::SwapChainDetails Window::_getSwapChainDetails ()
     auto surf = this->_surf;
     Window::SwapChainDetails details;
 
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(dev, surf, &details.capabilities);
-
-    uint32_t formatCount;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(dev, surf, &formatCount, nullptr);
-
-    if (formatCount != 0) {
-        details.formats.resize(formatCount);
-        vkGetPhysicalDeviceSurfaceFormatsKHR(dev, surf, &formatCount, details.formats.data());
-    }
-
-    uint32_t presentModeCount;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(dev, surf, &presentModeCount, nullptr);
-
-    if (presentModeCount != 0) {
-        details.presentModes.resize(presentModeCount);
-        vkGetPhysicalDeviceSurfacePresentModesKHR(
-            dev, surf,
-            &presentModeCount, details.presentModes.data());
-    }
+    details.capabilities = dev.getSurfaceCapabilitiesKHR(surf);
+    details.formats = dev.getSurfaceFormatsKHR(surf);
+    details.presentModes = dev.getSurfacePresentModesKHR(surf);
 
     return details;
 
@@ -260,18 +246,18 @@ Window::SwapChainDetails Window::_getSwapChainDetails ()
 void Window::_createSwapChain (bool depth, bool stencil)
 {
     // determine the required depth/stencil-buffer format
-    VkFormat dsFormat = this->_app->_depthStencilBufferFormat(depth, stencil);
-    if ((dsFormat == VK_FORMAT_UNDEFINED) && (depth || stencil)) {
+    vk::Format dsFormat = this->_app->_depthStencilBufferFormat(depth, stencil);
+    if ((dsFormat == vk::Format::eUndefined) && (depth || stencil)) {
         ERROR("depth/stencil buffer requested but not supported by device");
     }
-    this->_swap.numAttachments = (dsFormat == VK_FORMAT_UNDEFINED) ? 1 : 2;
+    this->_swap.numAttachments = (dsFormat == vk::Format::eUndefined) ? 1 : 2;
 
     SwapChainDetails swapChainSupport = this->_getSwapChainDetails ();
 
     // choose the best aspects of the swap chain
-    VkSurfaceFormatKHR surfaceFormat = swapChainSupport.chooseSurfaceFormat();
-    VkPresentModeKHR presentMode = swapChainSupport.choosePresentMode();
-    VkExtent2D extent = swapChainSupport.chooseExtent(this->_win);
+    vk::SurfaceFormatKHR surfaceFormat = swapChainSupport.chooseSurfaceFormat();
+    vk::PresentModeKHR presentMode = swapChainSupport.choosePresentMode();
+    vk::Extent2D extent = swapChainSupport.chooseExtent(this->_win);
 
     uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
     if ((swapChainSupport.capabilities.maxImageCount > 0)
@@ -279,49 +265,36 @@ void Window::_createSwapChain (bool depth, bool stencil)
         imageCount = swapChainSupport.capabilities.maxImageCount;
     }
 
-    VkSwapchainCreateInfoKHR swapInfo{};
-    swapInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    swapInfo.surface = this->_surf;
-
-    swapInfo.minImageCount = imageCount;
-    swapInfo.imageFormat = surfaceFormat.format;
-    swapInfo.imageColorSpace = surfaceFormat.colorSpace;
-    swapInfo.imageExtent = extent;
-    swapInfo.imageArrayLayers = 1;
-    swapInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
     auto qIdxs = this->_app->_qIdxs;
     uint32_t qIndices[] = {qIdxs.graphics, qIdxs.present};
 
-    // check if the graphics and presentation queues are distinct
-    if (qIdxs.graphics != qIdxs.present) {
-        swapInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-        swapInfo.queueFamilyIndexCount = 2;
-        swapInfo.pQueueFamilyIndices = qIndices;
-    }
-    else {
-        swapInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    }
+    vk::SwapchainCreateInfoKHR swapInfo(
+        {},
+        this->_surf,
+        imageCount, /* min image count */
+        surfaceFormat.format,
+        surfaceFormat.colorSpace,
+        extent,
+        1, /* image array layers */
+        vk::ImageUsageFlagBits::eColorAttachment,
+        // check if the graphics and presentation queues are distinct
+        (qIdxs.graphics != qIdxs.present
+            ? vk::SharingMode::eConcurrent
+            : vk::SharingMode::eExclusive),
+        (qIdxs.graphics != qIdxs.present
+            ? vk::ArrayProxyNoTemporaries<const uint32_t>(2, qIndices)
+            : nullptr),
+        swapChainSupport.capabilities.currentTransform,
+        vk::CompositeAlphaFlagBitsKHR::eOpaque,
+        presentMode,
+        VK_TRUE, /* clipped */
+        {}); /* old swapchain */
 
-    swapInfo.preTransform = swapChainSupport.capabilities.currentTransform;
-    swapInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    swapInfo.presentMode = presentMode;
-    swapInfo.clipped = VK_TRUE;
-
-    swapInfo.oldSwapchain = VK_NULL_HANDLE;
-
-    VkDevice dev = this->device();
-    auto sts = vkCreateSwapchainKHR(dev, &swapInfo, nullptr, &this->_swap.chain);
-    if (sts != VK_SUCCESS) {
-        ERROR("unable to create swap chain!");
-    }
+    auto dev = this->device();
+    this->_swap.chain = dev.createSwapchainKHR(swapInfo);
 
     // get the vector of images that represent the swap chain
-    vkGetSwapchainImagesKHR(dev, this->_swap.chain, &imageCount, nullptr);
-    this->_swap.images.resize(imageCount);
-    vkGetSwapchainImagesKHR(
-        dev, this->_swap.chain,
-        &imageCount, this->_swap.images.data());
+    this->_swap.images = dev.getSwapchainImagesKHR(this->_swap.chain);
 
     this->_swap.imageFormat = surfaceFormat.format;
     this->_swap.extent = extent;
@@ -332,107 +305,93 @@ void Window::_createSwapChain (bool depth, bool stencil)
         this->_swap.views[i] = this->_app->_createImageView(
             this->_swap.images[i],
             this->_swap.imageFormat,
-            VK_IMAGE_ASPECT_COLOR_BIT);
+            vk::ImageAspectFlagBits::eColor);
     }
 
-    if (dsFormat != VK_FORMAT_UNDEFINED) {
+    if (dsFormat != vk::Format::eUndefined) {
         // initialize the depth/stencil-buffer
         DepthStencilBuffer dsBuf;
         dsBuf.format = dsFormat;
         dsBuf.image = this->_app->_createImage(
             extent.width, extent.height,
             dsFormat,
-            VK_IMAGE_TILING_OPTIMAL,
-            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+            vk::ImageTiling::eOptimal,
+            vk::ImageUsageFlagBits::eDepthStencilAttachment);
         dsBuf.imageMem = this->_app->_allocImageMemory(
             dsBuf.image,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+            vk::MemoryPropertyFlagBits::eDeviceLocal);
         dsBuf.view = this->_app->_createImageView (
             dsBuf.image,
             dsFormat,
-            VK_IMAGE_ASPECT_DEPTH_BIT);
+            vk::ImageAspectFlagBits::eDepth);
         this->_swap.dsBuf = dsBuf;
     }
 }
 
 void Window::_initAttachments (
-    std::vector<VkAttachmentDescription> &descs,
-    std::vector<VkAttachmentReference> &refs)
+    std::vector<vk::AttachmentDescription> &descs,
+    std::vector<vk::AttachmentReference> &refs)
 {
     descs.resize(this->_swap.numAttachments);
     refs.resize(this->_swap.numAttachments);
 
     // the output color buffer
     descs[0].format = this->_swap.imageFormat;
-    descs[0].samples = VK_SAMPLE_COUNT_1_BIT;
-    descs[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    descs[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    descs[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    descs[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    descs[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    descs[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    descs[0].samples = vk::SampleCountFlagBits::e1;
+    descs[0].loadOp = vk::AttachmentLoadOp::eClear;
+    descs[0].storeOp = vk::AttachmentStoreOp::eStore;
+    descs[0].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+    descs[0].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+    descs[0].initialLayout = vk::ImageLayout::eUndefined;
+    descs[0].finalLayout = vk::ImageLayout::ePresentSrcKHR;
 
     refs[0].attachment = 0;
-    refs[0].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    refs[0].layout = vk::ImageLayout::eColorAttachmentOptimal;
 
     if (this->_swap.dsBuf.has_value()) {
+        // the optional depth-stencil buffer
         descs[1].format = this->_swap.dsBuf->format;
-        descs[1].samples = VK_SAMPLE_COUNT_1_BIT;
-        descs[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        descs[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        descs[1].samples = vk::SampleCountFlagBits::e1;
+        descs[1].loadOp = vk::AttachmentLoadOp::eClear;
+        descs[1].storeOp = vk::AttachmentStoreOp::eDontCare;
 /* FIXME: if we need stencil support, then the following is incorrect! */
-        descs[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        descs[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        descs[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        descs[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        descs[1].stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+        descs[1].stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+        descs[1].initialLayout = vk::ImageLayout::eUndefined;
+        descs[1].finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
 
         refs[1].attachment = 1;
-        refs[1].layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        refs[1].layout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
     }
 }
 
-void Window::_setViewportCmd (VkCommandBuffer cmdBuf,
+void Window::_setViewportCmd (
+    vk::CommandBuffer cmdBuf,
     int32_t x, int32_t y,
     int32_t wid, int32_t ht)
 {
-    VkViewport viewport{};
-    viewport.x = float(x);
-    viewport.y = float(y);
-    viewport.width = float(wid);
-    viewport.height = float(ht);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
+    vk::Viewport viewport(
+        float(x), float(y),
+        float(wid), float(ht),
+        0.0f, /* min depth */
+        1.0f); /* max depth */
+    cmdBuf.setViewport (0, viewport);
 
-    VkRect2D scissor{};
-    scissor.offset = {0, 0};
-    scissor.extent = {
-            static_cast<uint32_t>(std::abs(wid)),
-            static_cast<uint32_t>(std::abs(ht))
-        };
-    vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
-}
-
-void Window::_setViewportCmd (VkCommandBuffer cmdBuf)
-{
-    /* NOTE: we negate the height and set the Y origin to ht because Vulkan's
-     * viewport coordinates are from top-left down, instead of from bottom-left up.
-     * See https://www.saschawillems.de/blog/2019/03/29/flipping-the-vulkan-viewport
-     */
-    this->_setViewportCmd(cmdBuf,
-        0, this->_swap.extent.height,
-        this->_swap.extent.width, -this->_swap.extent.height);
+    vk::Rect2D scissor(
+        {0, 0},
+        {static_cast<uint32_t>(std::abs(wid)), static_cast<uint32_t>(std::abs(ht))});
+    cmdBuf.setScissor(0, { scissor });
 }
 
 
 /******************** struct Window::SwapChainDetails methods ********************/
 
 // choose the surface format for the buffers
-VkSurfaceFormatKHR Window::SwapChainDetails::chooseSurfaceFormat ()
+vk::SurfaceFormatKHR Window::SwapChainDetails::chooseSurfaceFormat ()
 {
     for (const auto& fmt : this->formats) {
-        if ((fmt.format == VK_FORMAT_B8G8R8A8_SRGB)
-        && (fmt.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)) {
+        if ((fmt.format == vk::Format::eB8G8R8A8Srgb)
+        && (fmt.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear)) {
             return fmt;
         }
     }
@@ -441,19 +400,19 @@ VkSurfaceFormatKHR Window::SwapChainDetails::chooseSurfaceFormat ()
 }
 
 // choose a presentation mode for the buffers
-VkPresentModeKHR Window::SwapChainDetails::choosePresentMode ()
+vk::PresentModeKHR Window::SwapChainDetails::choosePresentMode ()
 {
     for (const auto& mode : this->presentModes) {
-        if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
+        if (mode == vk::PresentModeKHR::eMailbox) {
             return mode;
         }
     }
 
-    return VK_PRESENT_MODE_FIFO_KHR;
+    return vk::PresentModeKHR::eFifo;
 }
 
 //! compute the extent of the buffers
-VkExtent2D Window::SwapChainDetails::chooseExtent (GLFWwindow *win)
+vk::Extent2D Window::SwapChainDetails::chooseExtent (GLFWwindow *win)
 {
     if (this->capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
         return this->capabilities.currentExtent;
@@ -462,10 +421,9 @@ VkExtent2D Window::SwapChainDetails::chooseExtent (GLFWwindow *win)
         int width, height;
         glfwGetFramebufferSize(win, &width, &height);
 
-        VkExtent2D actualExtent = {
-                static_cast<uint32_t>(width),
-                static_cast<uint32_t>(height)
-            };
+        vk::Extent2D actualExtent(
+            static_cast<uint32_t>(width),
+            static_cast<uint32_t>(height));
 
         actualExtent.width = std::clamp(
             actualExtent.width,
@@ -483,36 +441,36 @@ VkExtent2D Window::SwapChainDetails::chooseExtent (GLFWwindow *win)
 
 /******************** struct Window::SwapChain methods ********************/
 
-std::vector<VkFramebuffer> Window::SwapChain::framebuffers (VkRenderPass renderPass)
+std::vector<vk::Framebuffer> Window::SwapChain::framebuffers (vk::RenderPass renderPass)
 {
     assert (this->size() > 0);
 
     // the framebuffer attachments; currently we only have color, but we will add
     // a depth buffer
-    VkImageView attachments[this->numAttachments];
+    vk::ImageView attachments[this->numAttachments];
 
     if (this->dsBuf.has_value()) {
+        assert (this->numAttachments == 2);
         // include the depth buffer
         attachments[1] = this->dsBuf->view;
+    } else {
+        assert (this->numAttachments == 1);
     }
 
     // initialize the invariant parts of the create info structure
-    VkFramebufferCreateInfo fbInfo{};
-    fbInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    fbInfo.renderPass = renderPass;
-    fbInfo.attachmentCount = this->numAttachments;
-    fbInfo.pAttachments = attachments;
-    fbInfo.width = this->extent.width;
-    fbInfo.height = this->extent.height;
-    fbInfo.layers = 1;
+    vk::FramebufferCreateInfo fbInfo(
+        {}, /* flags */
+        renderPass,
+        vk::ArrayProxyNoTemporaries<const vk::ImageView>(
+            this->numAttachments, attachments),
+        this->extent.width, this->extent.height, 1);
 
     // create a frambuffer per swap-chain image
-    std::vector<VkFramebuffer> fbs(this->size());
+    std::vector<vk::Framebuffer> fbs;
+    fbs.reserve(this->size());
     for (size_t i = 0; i < this->size(); i++) {
         attachments[0] = this->views[i];
-        if (vkCreateFramebuffer(this->device, &fbInfo, nullptr, &fbs[i]) != VK_SUCCESS) {
-            ERROR("unable to create framebuffer");
-        }
+        fbs.push_back(this->device.createFramebuffer(fbInfo));
     }
 
     return fbs;
@@ -521,7 +479,7 @@ std::vector<VkFramebuffer> Window::SwapChain::framebuffers (VkRenderPass renderP
 void Window::SwapChain::cleanup ()
 {
     for (auto view : this->views) {
-        vkDestroyImageView(this->device, view, nullptr);
+        this->device.destroyImageView(view, nullptr);
     }
     /* note that the images are owned by the swap chain object, so we do not have
      * to destroy them.
@@ -529,127 +487,96 @@ void Window::SwapChain::cleanup ()
 
     // cleanup the depth buffer (if present)
     if (this->dsBuf.has_value()) {
-        vkDestroyImageView(this->device, this->dsBuf->view, nullptr);
-        vkDestroyImage(this->device, this->dsBuf->image, nullptr);
-        vkFreeMemory(this->device, this->dsBuf->imageMem, nullptr);
+        this->device.destroyImageView(this->dsBuf->view);
+        this->device.destroyImage(this->dsBuf->image);
+        this->device.freeMemory(this->dsBuf->imageMem);
     }
 
-    vkDestroySwapchainKHR(this->device, this->chain, nullptr);
+    this->device.destroySwapchainKHR(this->chain);
 }
 
 /******************** struct Window::SyncObjs methods ********************/
 
 void Window::SyncObjs::allocate ()
 {
-    // this is for backward compatibility; we used to do the allocation as a separate
-    // call, the there is no reason for that.
-    if (this->imageAvailable != VK_NULL_HANDLE) {
-        return;
-    }
-
-    // allocate synchronization objects
-    VkSemaphoreCreateInfo semInfo{};
-    semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-    VkFenceCreateInfo fenceInfo{};
-    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
     auto device = this->win->device();
-    if ((vkCreateSemaphore(device, &semInfo, nullptr, &this->imageAvailable) != VK_SUCCESS)
-    ||  (vkCreateSemaphore(device, &semInfo, nullptr, &this->renderFinished) != VK_SUCCESS)
-    ||  (vkCreateFence(device, &fenceInfo, nullptr, &this->inFlight) != VK_SUCCESS))
-    {
-        ERROR("unable to create synchronization objects");
-    }
+
+    vk::SemaphoreCreateInfo semInfo;
+    this->imageAvailable = device.createSemaphore(semInfo);
+    this->renderFinished = device.createSemaphore(semInfo);
+
+    vk::FenceCreateInfo fenceInfo(vk::FenceCreateFlagBits::eSignaled);
+    this->inFlight = device.createFence(fenceInfo);
 }
 
 Window::SyncObjs::~SyncObjs ()
 {
-    assert (this->imageAvailable != VK_NULL_HANDLE);
+    assert (this->imageAvailable);
 
     auto device = this->win->device();
 
     // delete synchronization objects
-    vkDestroyFence(device, this->inFlight, nullptr);
-    vkDestroySemaphore(device, this->imageAvailable, nullptr);
-    vkDestroySemaphore(device, this->renderFinished, nullptr);
+    device.destroyFence(this->inFlight);
+    device.destroySemaphore(this->imageAvailable);
+    device.destroySemaphore(this->renderFinished);
 
 }
 
-VkResult Window::SyncObjs::acquireNextImage (uint32_t &imageIndex)
+vk::ResultValue<uint32_t> Window::SyncObjs::acquireNextImage ()
 {
-    assert (this->inFlight != VK_NULL_HANDLE);
+    assert (this->inFlight);
 
-    vkWaitForFences(this->win->device(), 1, &this->inFlight, VK_TRUE, UINT64_MAX);
+    auto sts = this->win->device().waitForFences({this->inFlight}, VK_TRUE, UINT64_MAX);
+    if (sts != vk::Result::eSuccess) {
+        return vk::ResultValue<uint32_t>(sts, UINT32_MAX);
+    }
 
-    auto sts = vkAcquireNextImageKHR(
-        this->win->device(),
+    return this->win->device().acquireNextImageKHR(
         this->win->_swap.chain,
         UINT64_MAX,
         this->imageAvailable,
-        VK_NULL_HANDLE,
-        &imageIndex);
-
-    return sts;
+        VK_NULL_HANDLE);
 }
 
 //! reset the in-flight fence of this frame
 void Window::SyncObjs::reset ()
 {
-    assert (this->inFlight != VK_NULL_HANDLE);
+    assert (this->inFlight);
 
-    vkResetFences(this->win->device(), 1, &this->inFlight);
+    this->win->device().resetFences({this->inFlight});
+
 }
 
 //! submit a command buffer to a queue using this frame's synchronization objects
 //! \param q        the queue to submit the commands to
 //! \param cmdBuf   the command buffer to submit
-void Window::SyncObjs::submitCommands (VkQueue q, VkCommandBuffer const &cmdBuf)
+void Window::SyncObjs::submitCommands (vk::Queue q, vk::CommandBuffer const &cmdBuf)
 {
-    assert (this->imageAvailable != VK_NULL_HANDLE);
+    assert (this->imageAvailable);
 
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    vk::PipelineStageFlags pipeFlags = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    vk::SubmitInfo submitInfo(
+        this->imageAvailable,
+        pipeFlags,
+        cmdBuf,
+        this->renderFinished);
 
-    VkSemaphore waitSems[1] = { this->imageAvailable };
-    submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = waitSems;
-    VkPipelineStageFlags waitStages[1] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-    submitInfo.pWaitDstStageMask = waitStages;
+    q.submit({ submitInfo }, this->inFlight);
 
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &cmdBuf;
-
-    VkSemaphore signalSems[1] = { this->renderFinished };
-    submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = signalSems;
-
-    if (vkQueueSubmit(q, 1, &submitInfo, this->inFlight) != VK_SUCCESS) {
-        ERROR("unable to submit draw command buffer!");
-    }
 }
 
 //! \brief present the frame
 //! \param q  the presentation queue
 //! \return the return status of presenting the image
-VkResult Window::SyncObjs::present (VkQueue q, const uint32_t *imageIndices)
+vk::Result Window::SyncObjs::present (vk::Queue q, uint32_t imageIndex)
 {
-    VkPresentInfoKHR presentInfo{};
-    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    vk::PresentInfoKHR presentInfo(
+        this->renderFinished,
+        this->win->_swap.chain,
+        imageIndex,
+        nullptr);
 
-    VkSemaphore waitSems[1] = { this->renderFinished };
-    presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = waitSems;
-
-    presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = &this->win->_swap.chain;
-
-    presentInfo.pImageIndices = imageIndices;
-
-    auto sts = vkQueuePresentKHR(q, &presentInfo);
-
-    return sts;
+    return q.presentKHR(presentInfo);
 }
 
 } // namespace cs237

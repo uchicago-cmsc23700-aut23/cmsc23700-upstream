@@ -19,7 +19,14 @@
 namespace cs237 {
 
 static std::vector<const char *> requiredExtensions (bool debug);
-static int graphicsQueueIndex (VkPhysicalDevice dev);
+static int graphicsQueueIndex (vk::PhysicalDevice dev);
+
+// callback for debug messages
+static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback (
+    vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
+    vk::DebugUtilsMessageTypeFlagsEXT ty,
+    const vk::DebugUtilsMessengerCallbackDataEXT* cbData,
+    void* usrData);
 
 const std::vector<const char *> kValidationLayers = {
         "VK_LAYER_KHRONOS_validation"
@@ -28,25 +35,20 @@ const std::vector<const char *> kValidationLayers = {
 
 /******************** class Application methods ********************/
 
-Application::Application (std::vector<const char *> &args, std::string const &name)
+Application::Application (std::vector<std::string> const &args, std::string const &name)
   : _name(name),
-    _messages(VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT),
+    _messages(vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning),
     _debug(0),
     _gpu(VK_NULL_HANDLE),
     _propsCache(nullptr)
 {
     // process the command-line arguments
-    for (auto it = args.cbegin();  it != args.cend();  ++it) {
-        if (*it[0] == '-') {
-            if (strcmp(*it, "-debug") == 0) {
-                if (this->_messages > VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-                    this->_messages = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
-                }
-                this->_debug = true;
-            }
-            else if (strcmp(*it, "-verbose")) {
-                this->_messages = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
-            }
+    for (auto it : args) {
+        if (it == "-debug") {
+            this->_messages |= vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning;
+            this->_debug = true;
+        } else if (it == "-verbose") {
+            this->_messages = vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose;
         }
     }
 
@@ -55,6 +57,11 @@ Application::Application (std::vector<const char *> &args, std::string const &na
 
     // create a Vulkan instance
     this->_createInstance();
+
+    // set up the debug handler
+    if (this->_debug) {
+        this->_initDebug ();
+    }
 
     // initialize the command pool
     this->_initCommandPool();
@@ -65,15 +72,22 @@ Application::~Application ()
     if (this->_propsCache != nullptr) {
         delete this->_propsCache;
     }
+    if (this->_featuresCache != nullptr) {
+        delete this->_featuresCache;
+    }
 
     // delete the command pool
-    vkDestroyCommandPool(this->_device, this->_cmdPool, nullptr);
+    this->_device.destroyCommandPool(this->_cmdPool, nullptr);
 
     // destroy the logical device
-    vkDestroyDevice(this->_device, nullptr);
+    this->_device.destroy();
+
+    if (this->_debug) {
+        this->_cleanupDebug();
+    }
 
     // delete the instance
-    vkDestroyInstance(this->_instance, nullptr);
+    this->_instance.destroy();
 
     // shut down GLFW
     glfwTerminate();
@@ -84,42 +98,31 @@ Application::~Application ()
 void Application::_createInstance ()
 {
     // set up the application information
-    VkApplicationInfo appInfo{};
-    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    appInfo.pApplicationName = this->_name.data();
-    appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.pEngineName = nullptr;
-    appInfo.engineVersion = 0;
-    appInfo.apiVersion = VK_API_VERSION_1_3;
+    vk::ApplicationInfo appInfo(
+        this->_name.c_str(), /* application name */
+        VK_MAKE_VERSION(1, 0, 0), /* application version */
+        nullptr, /* engine name */
+        0, /* engine version */
+        VK_API_VERSION_1_3); /* API version */
 
     // figure out what extensions we are going to need
     auto extensions = requiredExtensions(this->_debug);
 
     // intialize the creation info struct
-    VkInstanceCreateInfo createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    createInfo.pNext = nullptr;
-    createInfo.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
-    createInfo.pApplicationInfo = &appInfo;
-    if (this->_debug) {
-        // in debug mode, we add validation layer(s)
-        createInfo.enabledLayerCount = kValidationLayers.size();
-        createInfo.ppEnabledLayerNames = kValidationLayers.data();
-    }
-    else {
-        createInfo.enabledLayerCount = 0;
-        createInfo.ppEnabledLayerNames = nullptr;
-    }
-    createInfo.enabledExtensionCount = extensions.size();
-    createInfo.ppEnabledExtensionNames = extensions.data();
+    vk::InstanceCreateInfo createInfo(
+        vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR,
+        &appInfo,
+        (this->_debug
+            // in debug mode, we add validation layer(s)
+            ? kValidationLayers
+            : vk::ArrayProxyNoTemporaries<const char * const>()),
+        extensions);
 
-    if (vkCreateInstance(&createInfo, nullptr, &(this->_instance)) != VK_SUCCESS) {
-        ERROR("unable to create a vulkan instance");
-    }
+    this->_instance = vk::createInstance(createInfo);
 
     // pick the physical device; we require fillModeNonSolid to support
     // wireframes and samplerAnisotropy for texture mapping
-    VkPhysicalDeviceFeatures reqs{};
+    vk::PhysicalDeviceFeatures reqs{};
     reqs.fillModeNonSolid = VK_TRUE;
     reqs.samplerAnisotropy = VK_TRUE;
     this->_selectDevice (&reqs);
@@ -130,15 +133,17 @@ void Application::_createInstance ()
 
 // check that a device meets the requested features
 //
-static bool hasFeatures (VkPhysicalDevice gpu, VkPhysicalDeviceFeatures *reqFeatures)
+static bool hasFeatures (vk::PhysicalDevice gpu, vk::PhysicalDeviceFeatures *reqFeatures)
 {
     if (reqFeatures == nullptr) {
         return true;
     }
-    VkPhysicalDeviceFeatures availFeatures;
-    vkGetPhysicalDeviceFeatures (gpu, &availFeatures);
+    vk::PhysicalDeviceFeatures availFeatures = gpu.getFeatures();
 
-    if (reqFeatures->fillModeNonSolid == availFeatures.fillModeNonSolid) {
+    if (reqFeatures->depthClamp == availFeatures.depthClamp) {
+        return true;
+    }
+    else if (reqFeatures->fillModeNonSolid == availFeatures.fillModeNonSolid) {
         return true;
     }
     else if (reqFeatures->samplerAnisotropy == availFeatures.samplerAnisotropy) {
@@ -152,19 +157,14 @@ static bool hasFeatures (VkPhysicalDevice gpu, VkPhysicalDeviceFeatures *reqFeat
 // A helper function to pick the physical device when there is more than one.
 // Currently, we ignore the features and favor discrete GPUs over other kinds
 //
-void Application::_selectDevice (VkPhysicalDeviceFeatures *reqFeatures)
+void Application::_selectDevice (vk::PhysicalDeviceFeatures *reqFeatures)
 {
-    // figure out how many devices are available
-    uint32_t devCount = 0;
-    vkEnumeratePhysicalDevices(this->_instance, &devCount, nullptr);
+    // get the available devices
+    auto devices = this->_instance.enumeratePhysicalDevices();
 
-    if (devCount == 0) {
+    if (devices.empty()) {
         ERROR("no available GPUs");
     }
-
-    // get the available devices
-    std::vector<VkPhysicalDevice> devices(devCount);
-    vkEnumeratePhysicalDevices(this->_instance, &devCount, devices.data());
 
     // Select a device that supports graphics and presentation
     // This code is brute force, but we only expect one or two devices.
@@ -175,9 +175,8 @@ void Application::_selectDevice (VkPhysicalDeviceFeatures *reqFeatures)
     // we first look for a discrete GPU
     for (auto & dev : devices) {
         if (hasFeatures(dev, reqFeatures) && this->_getQIndices(dev)) {
-            VkPhysicalDeviceProperties props;
-            vkGetPhysicalDeviceProperties(dev, &props);
-            if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+            vk::PhysicalDeviceProperties props = dev.getProperties();
+            if (props.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
                 this->_gpu = dev;
                 return;
             }
@@ -186,9 +185,8 @@ void Application::_selectDevice (VkPhysicalDeviceFeatures *reqFeatures)
     // no discrete GPU, so look for an integrated GPU
     for (auto & dev : devices) {
         if (hasFeatures(dev, reqFeatures) && this->_getQIndices(dev)) {
-            VkPhysicalDeviceProperties props;
-            vkGetPhysicalDeviceProperties(dev, &props);
-            if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) {
+            vk::PhysicalDeviceProperties props = dev.getProperties();
+            if (props.deviceType == vk::PhysicalDeviceType::eIntegratedGpu) {
                 this->_gpu = dev;
                 return;
             }
@@ -211,17 +209,23 @@ void Application::_getPhysicalDeviceProperties () const
 {
     assert (this->_propsCache == nullptr);
 
-    this->_propsCache = new VkPhysicalDeviceProperties;
-    vkGetPhysicalDeviceProperties(this->_gpu, this->_propsCache);
+    this->_propsCache = new vk::PhysicalDeviceProperties(this->_gpu.getProperties());
+}
+
+void Application::_getPhysicalDeviceFeatures () const
+{
+    assert (this->_featuresCache == nullptr);
+
+    this->_featuresCache = new vk::PhysicalDeviceFeatures;
+    this->_gpu.getFeatures (this->_featuresCache);
 }
 
 int32_t Application::_findMemory (
     uint32_t reqTypeBits,
-    VkMemoryPropertyFlags reqProps) const
+    vk::MemoryPropertyFlags reqProps) const
 {
     // get the memory properties for the device
-    VkPhysicalDeviceMemoryProperties memProps;
-    vkGetPhysicalDeviceMemoryProperties(this->_gpu, &memProps);
+    vk::PhysicalDeviceMemoryProperties memProps = this->_gpu.getMemoryProperties();
 
     for (int32_t i = 0; i < memProps.memoryTypeCount; i++) {
         if ((reqTypeBits & (1 << i))
@@ -235,57 +239,56 @@ int32_t Application::_findMemory (
 
 }
 
-VkFormat Application::_findBestFormat (
-    std::vector<VkFormat> candidates,
-    VkImageTiling tiling,
-    VkFormatFeatureFlags features)
+vk::Format Application::_findBestFormat (
+    std::vector<vk::Format> candidates,
+    vk::ImageTiling tiling,
+    vk::FormatFeatureFlags features)
 {
-    for (VkFormat fmt : candidates) {
-        VkFormatProperties props;
-        vkGetPhysicalDeviceFormatProperties(this->_gpu, fmt, &props);
-        if (tiling == VK_IMAGE_TILING_LINEAR) {
+    for (vk::Format fmt : candidates) {
+        vk::FormatProperties props = this->_gpu.getFormatProperties(fmt);
+        if (tiling == vk::ImageTiling::eLinear) {
             if ((props.linearTilingFeatures & features) == features) {
                 return fmt;
             }
-        } else { // VK_IMAGE_TILING_OPTIMAL
+        } else { // vk::ImageTiling::eOptimal
             if ((props.optimalTilingFeatures & features) == features) {
                 return fmt;
             }
         }
     }
-    return VK_FORMAT_UNDEFINED;
+    return vk::Format::eUndefined;
 }
 
-VkFormat Application::_depthStencilBufferFormat (bool depth, bool stencil)
+vk::Format Application::_depthStencilBufferFormat (bool depth, bool stencil)
 {
     if (!depth && !stencil) {
-        return VK_FORMAT_UNDEFINED;
+        return vk::Format::eUndefined;
     }
 
     // construct a list of valid candidate formats in best-to-worst order
-    std::vector<VkFormat> candidates;
+    std::vector<vk::Format> candidates;
     if (!depth) {
-        candidates.push_back(VK_FORMAT_S8_UINT);                // 8-bit stencil; no depth
+        candidates.push_back(vk::Format::eS8Uint);              // 8-bit stencil; no depth
     }
     if (!stencil) {
-        candidates.push_back(VK_FORMAT_D32_SFLOAT);             // 32-bit depth; no stencil
+        candidates.push_back(vk::Format::eD32SfloatS8Uint);     // 32-bit depth; no stencil
     }
-    candidates.push_back(VK_FORMAT_D32_SFLOAT_S8_UINT);         // 32-bit depth + 8-bit stencil
+    candidates.push_back(vk::Format::eD32SfloatS8Uint);         // 32-bit depth + 8-bit stencil
     if (!stencil) {
-        candidates.push_back(VK_FORMAT_X8_D24_UNORM_PACK32);    // 24-bit depth; no stencil
-        candidates.push_back(VK_FORMAT_D16_UNORM);              // 16-bit depth; no stencil
+        candidates.push_back(vk::Format::eX8D24UnormPack32);    // 24-bit depth; no stencil
+        candidates.push_back(vk::Format::eD16UnormS8Uint);      // 16-bit depth; no stencil
     }
-    candidates.push_back(VK_FORMAT_D16_UNORM_S8_UINT);          // 16-bit depth + 8-bit stencil
+    candidates.push_back(vk::Format::eD16UnormS8Uint);          // 16-bit depth + 8-bit stencil
 
     return this->_findBestFormat(
         candidates,
-        VK_IMAGE_TILING_OPTIMAL,
-        VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+        vk::ImageTiling::eOptimal,
+        vk::FormatFeatureFlagBits::eDepthStencilAttachment);
 
 }
 
 //! helper function to check if named extension is in a vector of extension properties
-static bool extInList (const char *name, std::vector<VkExtensionProperties> const &props)
+static bool extInList (const char *name, std::vector<vk::ExtensionProperties> const &props)
 {
     for (auto it = props.cbegin();  it != props.cend();  ++it) {
         if (strcmp(it->extensionName, name) == 0) {
@@ -297,35 +300,20 @@ static bool extInList (const char *name, std::vector<VkExtensionProperties> cons
 
 void Application::_createLogicalDevice ()
 {
-    VkDeviceCreateInfo createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    createInfo.pNext = nullptr;
-
     // set up the device queues info struct; the graphics and presentation queues may
     // be different or the same, so we have to initialize either one or two create-info
     // structures
-    std::vector<VkDeviceQueueCreateInfo> qCreateInfos;
+    std::vector<vk::DeviceQueueCreateInfo> qCreateInfos;
     std::set<uint32_t> uniqueQIndices = { this->_qIdxs.graphics, this->_qIdxs.present };
 
     float qPriority = 1.0f;
     for (auto qix : uniqueQIndices) {
-        VkDeviceQueueCreateInfo qCreateInfo{};
-        qCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        qCreateInfo.queueFamilyIndex = qix;
-        qCreateInfo.queueCount = 1;
-        qCreateInfo.pQueuePriorities = &qPriority;
+        vk::DeviceQueueCreateInfo qCreateInfo(
+            {}, /* flags */
+            qix, /* queue-family index */
+            1, /* queue count */
+            &qPriority); /* queue priority */
         qCreateInfos.push_back(qCreateInfo);
-    }
-
-    createInfo.queueCreateInfoCount = static_cast<uint32_t>(qCreateInfos.size());
-    createInfo.pQueueCreateInfos = qCreateInfos.data();
-
-    // include validation layer if in debug mode
-    if (this->_debug) {
-        createInfo.enabledLayerCount = static_cast<uint32_t>(kValidationLayers.size());
-        createInfo.ppEnabledLayerNames = kValidationLayers.data();
-    } else {
-        createInfo.enabledLayerCount = 0;
     }
 
     // get the extensions that are supported by the device
@@ -344,353 +332,344 @@ void Application::_createLogicalDevice ()
         kDeviceExts.push_back("VK_KHR_portability_subset");
     }
 
-    // set up the enabled extensions to include swap chains
-    createInfo.enabledExtensionCount = static_cast<uint32_t>(kDeviceExts.size());
-    createInfo.ppEnabledExtensionNames = kDeviceExts.data();
-
     // for now, we are only enabling a couple of extra features
-    VkPhysicalDeviceFeatures deviceFeatures{};
+    vk::PhysicalDeviceFeatures deviceFeatures{};
     deviceFeatures.fillModeNonSolid = VK_TRUE;
     deviceFeatures.samplerAnisotropy = VK_TRUE;
-    createInfo.pEnabledFeatures = &deviceFeatures;
+
+    // initialize the create info
+    vk::DeviceCreateInfo createInfo(
+        {}, /* flags */
+        qCreateInfos,
+        (this->_debug // validation layers (if in debug mode)
+            ? kValidationLayers
+            : vk::ArrayProxyNoTemporaries<const char * const>()),
+        kDeviceExts, /* enabled extension names */
+        &deviceFeatures); /* enabled device features */
 
     // create the logical device
-    if (vkCreateDevice(this->_gpu, &createInfo, nullptr, &this->_device) != VK_SUCCESS) {
-        ERROR("unable to create logical device!");
-    }
+    this->_device = this->_gpu.createDevice(createInfo);
 
     // get the queues
-    vkGetDeviceQueue(this->_device, this->_qIdxs.graphics, 0, &this->_queues.graphics);
-    vkGetDeviceQueue(this->_device, this->_qIdxs.present, 0, &this->_queues.present);
+    this->_queues.graphics = this->_device.getQueue(this->_qIdxs.graphics, 0);
+    this->_queues.present = this->_device.getQueue(this->_qIdxs.present, 0);
 
 }
 
 // create a Vulkan image; used for textures, depth buffers, etc.
-VkImage Application::_createImage (
+vk::Image Application::_createImage (
     uint32_t wid,
-    uint32_t ht, VkFormat format,
-    VkImageTiling tiling,
-    VkImageUsageFlags usage)
+    uint32_t ht,
+    vk::Format format,
+    vk::ImageTiling tiling,
+    vk::ImageUsageFlags usage,
+    uint32_t mipLvls)
 {
-    VkImageCreateInfo imageInfo{};
-    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageInfo.imageType = VK_IMAGE_TYPE_2D;
-    imageInfo.extent.width = wid;
-    imageInfo.extent.height = ht;
-    imageInfo.extent.depth = 1;
-    imageInfo.mipLevels = 1;
-    imageInfo.arrayLayers = 1;
-    imageInfo.format = format;
-    imageInfo.tiling = tiling;
-    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    imageInfo.usage = usage;
-    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    vk::ImageCreateInfo imageInfo(
+        {}, /* flags */
+        vk::ImageType::e2D,
+        format,
+        { wid, ht, 1 }, /* extend: wid, ht, depth */
+        mipLvls, /* mip levels */
+        1, /* array layers */
+        vk::SampleCountFlagBits::e1, /* samples */
+        tiling,
+        usage,
+        vk::SharingMode::eExclusive, /* sharing mode */
+        {},
+        vk::ImageLayout::eUndefined);
 
-    VkImage image;
-    auto sts = vkCreateImage(this->_device, &imageInfo, nullptr, &image);
-    if (sts != VK_SUCCESS) {
-        ERROR("unable to create image!");
-    }
-
-    return image;
+    return this->_device.createImage(imageInfo);
 }
 
-VkDeviceMemory Application::_allocImageMemory (VkImage img, VkMemoryPropertyFlags props)
+vk::DeviceMemory Application::_allocImageMemory (vk::Image img, vk::MemoryPropertyFlags props)
 {
-    VkMemoryRequirements memRequirements;
-    vkGetImageMemoryRequirements(this->_device, img, &memRequirements);
+    auto memRequirements = this->_device.getImageMemoryRequirements(img);
 
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = this->_findMemory(memRequirements.memoryTypeBits, props);
+    vk::MemoryAllocateInfo allocInfo(
+        memRequirements.size,
+        this->_findMemory(memRequirements.memoryTypeBits, props));
 
-    VkDeviceMemory mem;
-    if (vkAllocateMemory(this->_device, &allocInfo, nullptr, &mem) != VK_SUCCESS) {
-        ERROR("unable to allocate image memory!");
-    }
+    vk::DeviceMemory mem = this->_device.allocateMemory(allocInfo);
 
-    vkBindImageMemory(this->_device, img, mem, 0);
+    this->_device.bindImageMemory(img, mem, 0);
 
     return mem;
 }
 
-VkImageView Application::_createImageView (
-    VkImage img,
-    VkFormat fmt,
-    VkImageAspectFlags aspectFlags)
+vk::ImageView Application::_createImageView (
+    vk::Image img,
+    vk::Format fmt,
+    vk::ImageAspectFlags aspectFlags)
 {
-    assert (img != VK_NULL_HANDLE);
+    assert (img);
 
-    VkImageViewCreateInfo viewInfo{};
-    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.image = img;
-    viewInfo.format = fmt;
-    viewInfo.subresourceRange.aspectMask = aspectFlags;
-    viewInfo.subresourceRange.baseMipLevel = 0;
-    viewInfo.subresourceRange.levelCount = 1;
-    viewInfo.subresourceRange.baseArrayLayer = 0;
-    viewInfo.subresourceRange.layerCount = 1;
+    vk::ImageViewCreateInfo viewInfo(
+        {}, /* flags */
+        img,
+        vk::ImageViewType::e2D,
+        fmt,
+        {}, /* component mapping */
+        { aspectFlags, 0, 1, 0, 1 });
 
-    VkImageView imageView;
-    auto sts = vkCreateImageView(this->_device, &viewInfo, nullptr, &imageView);
-    if (sts != VK_SUCCESS) {
-        ERROR("unable to create texture image view!");
-    }
-
-    return imageView;
+    return this->_device.createImageView(viewInfo);
 
 }
 
-VkBuffer Application::_createBuffer (size_t size, VkBufferUsageFlags usage)
+vk::Buffer Application::_createBuffer (size_t size, vk::BufferUsageFlags usage)
 {
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = size;
-    bufferInfo.usage = usage;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    vk::BufferCreateInfo bufferInfo(
+        {}, /* flags */
+        size,
+        usage,
+        vk::SharingMode::eExclusive,
+        {});
 
-    VkBuffer buf;
-    if (vkCreateBuffer(this->_device, &bufferInfo, nullptr, &buf) != VK_SUCCESS) {
-        ERROR("unable to create buffer!");
-    }
-
-    return buf;
+    return this->_device.createBuffer(bufferInfo);
 }
 
-VkDeviceMemory Application::_allocBufferMemory (VkBuffer buf, VkMemoryPropertyFlags props)
+vk::DeviceMemory Application::_allocBufferMemory (vk::Buffer buf, vk::MemoryPropertyFlags props)
 {
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(this->_device, buf, &memRequirements);
+    auto memRequirements = this->_device.getBufferMemoryRequirements(buf);
 
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = this->_findMemory(memRequirements.memoryTypeBits, props);
+    vk::MemoryAllocateInfo allocInfo(
+        memRequirements.size,
+        this->_findMemory(memRequirements.memoryTypeBits, props));
 
-    VkDeviceMemory mem;
-    if (vkAllocateMemory(this->_device, &allocInfo, nullptr, &mem) != VK_SUCCESS) {
-        ERROR("unable to allocate buffer memory!");
-    }
+    vk::DeviceMemory mem = this->_device.allocateMemory(allocInfo);
 
-    vkBindBufferMemory(this->_device, buf, mem, 0);
+    this->_device.bindBufferMemory(buf, mem, 0);
 
     return mem;
 
 }
 
 void Application::_transitionImageLayout (
-    VkImage image,
-    VkFormat format,
-    VkImageLayout oldLayout,
-    VkImageLayout newLayout)
+    vk::Image image,
+    vk::Format format,
+    vk::ImageLayout oldLayout,
+    vk::ImageLayout newLayout)
 {
-        VkCommandBuffer cmdBuf = this->_newCommandBuf();
+    vk::CommandBuffer cmdBuf = this->newCommandBuf();
 
-        this->_beginCommands(cmdBuf);
+    this->beginCommands(cmdBuf);
 
-        VkImageMemoryBarrier barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.oldLayout = oldLayout;
-        barrier.newLayout = newLayout;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = image;
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
+    vk::ImageMemoryBarrier barrier(
+        {}, /* src access mask */
+        {}, /* dst access mask */
+        oldLayout,
+        newLayout,
+        VK_QUEUE_FAMILY_IGNORED,
+        VK_QUEUE_FAMILY_IGNORED,
+        image,
+        { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 });
 
-        VkPipelineStageFlags srcStage;
-        VkPipelineStageFlags dstStage;
+    vk::PipelineStageFlags srcStage;
+    vk::PipelineStageFlags dstStage;
 
-        if ((oldLayout == VK_IMAGE_LAYOUT_UNDEFINED)
-        && (newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)) {
-            barrier.srcAccessMask = 0;
-            barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    if ((oldLayout == vk::ImageLayout::eUndefined)
+    && (newLayout == vk::ImageLayout::eTransferDstOptimal)) {
+        barrier.srcAccessMask = {};
+        barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
 
-            srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-            dstStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        }
-        else if ((oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-        && (newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)) {
-            barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        srcStage = vk::PipelineStageFlagBits::eTopOfPipe;
+        dstStage = vk::PipelineStageFlagBits::eTransfer;
+    }
+    else if ((oldLayout == vk::ImageLayout::eTransferDstOptimal)
+    && (newLayout == vk::ImageLayout::eShaderReadOnlyOptimal)) {
+        barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+        barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
 
-            srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-            dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        }
-        else {
-            ERROR("unsupported layout transition!");
-        }
+        srcStage = vk::PipelineStageFlagBits::eTransfer;
+        dstStage = vk::PipelineStageFlagBits::eFragmentShader;
+    }
+    else {
+        ERROR("unsupported layout transition!");
+    }
 
-        vkCmdPipelineBarrier(
-            cmdBuf, srcStage, dstStage,
-            0,
-            0, nullptr,
-            0, nullptr,
-            1, &barrier);
+    cmdBuf.pipelineBarrier(
+        srcStage, dstStage,
+        {},
+        {},
+        {},
+        {barrier});
 
-        this->_endCommands(cmdBuf);
-        this->_submitCommands(cmdBuf);
-        this->_freeCommandBuf(cmdBuf);
+    this->endCommands(cmdBuf);
+    this->submitCommands(cmdBuf);
+    this->freeCommandBuf(cmdBuf);
 
 }
 
-void Application::_copyBuffer (VkBuffer srcBuf, VkBuffer dstBuf, size_t size)
+void Application::_copyBuffer (
+    vk::Buffer srcBuf, vk::Buffer dstBuf,
+    size_t offset, size_t size)
 {
-    VkCommandBuffer cmdBuf = this->_newCommandBuf();
+    vk::CommandBuffer cmdBuf = this->newCommandBuf();
 
-    this->_beginCommands(cmdBuf);
+    this->beginCommands(cmdBuf);
 
-    VkBufferCopy copyRegion{};
-    copyRegion.size = size;
-    vkCmdCopyBuffer(cmdBuf, srcBuf, dstBuf, 1, &copyRegion);
+    vk::BufferCopy copyRegion(0, offset, size); /* args: src offset, dst offset, size */
+    cmdBuf.copyBuffer(srcBuf, dstBuf, {copyRegion});
 
-    this->_endCommands(cmdBuf);
-    this->_submitCommands(cmdBuf);
-    this->_freeCommandBuf(cmdBuf);
+    this->endCommands(cmdBuf);
+    this->submitCommands(cmdBuf);
+    this->freeCommandBuf(cmdBuf);
 
 }
 
 void Application::_copyBufferToImage (
-        VkImage dstImg, VkBuffer srcBuf, size_t size,
+        vk::Image dstImg, vk::Buffer srcBuf, size_t size,
         uint32_t wid, uint32_t ht, uint32_t depth)
 {
-    VkCommandBuffer cmdBuf = this->_newCommandBuf();
+    vk::CommandBuffer cmdBuf = this->newCommandBuf();
 
-    this->_beginCommands(cmdBuf);
+    this->beginCommands(cmdBuf);
 
-    VkBufferImageCopy region{};
-    region.bufferOffset = 0;
-    region.bufferRowLength = 0;
-    region.bufferImageHeight = 0;
-    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    region.imageSubresource.mipLevel = 0;
-    region.imageSubresource.baseArrayLayer = 0;
-    region.imageSubresource.layerCount = 1;
-    region.imageOffset = {0, 0, 0};
-    region.imageExtent = { wid, ht, depth };
+    vk::BufferImageCopy region(
+        0, /* offset */
+        0, /* row length */
+        0, /* image height */
+        { vk::ImageAspectFlagBits::eColor, 0, 0, 1 },
+        { 0, 0, 0 },
+        { wid, ht, depth });
 
-    vkCmdCopyBufferToImage(
-        cmdBuf, srcBuf, dstImg,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    cmdBuf.copyBufferToImage(
+        srcBuf, dstImg,
+        vk::ImageLayout::eTransferDstOptimal,
+        {region});
 
-    this->_endCommands(cmdBuf);
-    this->_submitCommands(cmdBuf);
-    this->_freeCommandBuf(cmdBuf);
+    this->endCommands(cmdBuf);
+    this->submitCommands(cmdBuf);
+    this->freeCommandBuf(cmdBuf);
 
 }
 
 void Application::_initCommandPool ()
 {
-    VkCommandPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    poolInfo.queueFamilyIndex = this->_qIdxs.graphics;
+    vk::CommandPoolCreateInfo poolInfo(
+        vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+        this->_qIdxs.graphics);
 
-    auto sts = vkCreateCommandPool(this->_device, &poolInfo, nullptr, &this->_cmdPool);
-    if (sts != VK_SUCCESS) {
-        ERROR("unable to create command pool!");
+    this->_cmdPool = this->_device.createCommandPool(poolInfo);
+}
+
+
+vk::Sampler Application::createSampler (Application::SamplerInfo const &info)
+{
+    vk::SamplerCreateInfo samplerInfo(
+        {}, /* flags */
+        info.magFilter,
+        info.minFilter,
+        info.mipmapMode,
+        info.addressModeU,
+        info.addressModeV,
+        info.addressModeW,
+        0.0, /* mip LOD bias */
+        VK_TRUE, /* anisotropy enable */
+        this->limits()->maxSamplerAnisotropy,
+        VK_FALSE, /* compare enable */
+        vk::CompareOp::eNever, /* compare op */
+        0, /* min LOD */
+        0, /* max LOD */
+        vk::BorderColor::eFloatTransparentBlack, /* borderColor */
+        VK_FALSE); /* unnormalized coordinates */
+
+    return this->_device.createSampler(samplerInfo);
+}
+
+vk::Pipeline Application::createPipeline (
+    cs237::Shaders *shaders,
+    vk::PipelineVertexInputStateCreateInfo const &vertexInfo,
+    vk::PrimitiveTopology prim,
+    bool primRestart,
+    vk::ArrayProxy<vk::Viewport> const &viewports,
+    vk::ArrayProxy<vk::Rect2D> const &scissors,
+    bool depthClamp,
+    vk::PolygonMode polyMode,
+    vk::CullModeFlags cullMode,
+    vk::FrontFace front,
+    vk::PipelineLayout layout,
+    vk::RenderPass renderPass,
+    uint32_t subPass,
+    vk::ArrayProxy<vk::DynamicState> const &dynamic)
+{
+    vk::PipelineInputAssemblyStateCreateInfo asmInfo(
+        {}, /* flags */
+        prim, /* topology */
+        primRestart ? VK_TRUE : VK_FALSE); /* primitive restart */
+
+    vk::PipelineViewportStateCreateInfo viewportState(
+        {}, /* flags */
+        viewports, /* viewport */
+        scissors); /* scissor rects */
+
+    vk::PipelineRasterizationStateCreateInfo rasterizer(
+        {},
+        depthClamp ? VK_TRUE : VK_FALSE, /* depth clamp */
+        VK_FALSE, /* rasterizer discard */
+        polyMode, /* polygon mode */
+        cullMode, /* cull mode */
+        front, /* front face orientation */
+        VK_FALSE, /* depth bias enable */
+        0.0f, 0.0f, 0.0f, /* depth bias: constant, clamp, and slope */
+        1.0f); /* line width */
+
+    // no multisampling, which is the default
+    vk::PipelineMultisampleStateCreateInfo multisampling{};
+
+    vk::PipelineDepthStencilStateCreateInfo depthStencil(
+        {}, /* flags */
+        VK_TRUE, /* depth-test enable */
+        VK_TRUE, /* depth-write enable */
+        vk::CompareOp::eLess, /* depth-compare operation */
+        VK_FALSE, /* bounds-test enable */
+        VK_FALSE); /* stencil-test enable */
+        /* defaults for remaining fields */
+
+    vk::PipelineColorBlendAttachmentState colorBlendAttachment(
+        VK_FALSE, /* blend enable */
+        vk::BlendFactor::eZero, vk::BlendFactor::eZero,
+        vk::BlendOp::eAdd, /* color blend op */
+        vk::BlendFactor::eZero, vk::BlendFactor::eZero,
+        vk::BlendOp::eAdd, /* alpha blend op */
+        vk::FlagTraits<vk::ColorComponentFlagBits>::allFlags); /* color write mask */
+
+    vk::PipelineColorBlendStateCreateInfo colorBlending(
+        {}, /* flags */
+        VK_FALSE, /* logic-op enable */
+        vk::LogicOp::eClear, /* logic op */
+        colorBlendAttachment, /* attachments */
+        { 0.0f, 0.0f, 0.0f, 0.0f }); /* blend constants */
+
+    vk::PipelineDynamicStateCreateInfo dynamicState(
+        {}, /* flags */
+        dynamic);
+
+    vk::GraphicsPipelineCreateInfo pipelineInfo(
+        {}, /* flags */
+        shaders->stages(), /* stages */
+	&vertexInfo, /* vertex-input state */
+	&asmInfo, /* input-assembly state */
+        {}, /* tesselation state */
+	&viewportState, /* viewport state */
+	&rasterizer, /* rasterization state */
+	&multisampling, /* multisample state */
+        &depthStencil, /* depth-stencil state */
+	&colorBlending, /* color-blend state */
+	&dynamicState, /* dynamic state */
+	layout, /* layout */
+	renderPass, /* render pass */
+	0, /* subpass */
+	nullptr); /* base pipeline */
+
+    // create the pipeline
+    auto pipes = this->device().createGraphicsPipelines(
+        nullptr,
+        pipelineInfo);
+    if (pipes.result != vk::Result::eSuccess) {
+        ERROR("unable to create graphics pipeline!");
     }
-}
-
-VkCommandBuffer Application::_newCommandBuf ()
-{
-    VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandPool = this->_cmdPool;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = 1;
-
-    VkCommandBuffer cmdBuf;
-    auto sts = vkAllocateCommandBuffers(this->_device, &allocInfo, &cmdBuf);
-    if (sts != VK_SUCCESS) {
-        ERROR("unable to allocate command buffer!");
-    }
-
-    return cmdBuf;
-}
-
-void Application::_beginCommands (VkCommandBuffer cmdBuf)
-{
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-    if (vkBeginCommandBuffer(cmdBuf, &beginInfo) != VK_SUCCESS) {
-        ERROR("unable to begin recording command buffer!");
-    }
-}
-
-void Application::_endCommands (VkCommandBuffer cmdBuf)
-{
-    if (vkEndCommandBuffer(cmdBuf) != VK_SUCCESS) {
-        ERROR("unable to record command buffer!");
-    }
-}
-
-void Application::_submitCommands (VkCommandBuffer cmdBuf)
-{
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &cmdBuf;
-
-    auto grQ = this->_queues.graphics;
-    vkQueueSubmit(grQ, 1, &submitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(grQ);
-
-}
-
-VkSampler Application::createSampler (Application::SamplerInfo const &info)
-{
-    VkSamplerCreateInfo samplerInfo{};
-    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    samplerInfo.magFilter = info.magFilter;
-    samplerInfo.minFilter = info.minFilter;
-    samplerInfo.mipmapMode = info.mipmapMode;
-    samplerInfo.addressModeU = info.addressModeU;
-    samplerInfo.addressModeV = info.addressModeV;
-    samplerInfo.addressModeW = info.addressModeW;
-    samplerInfo.borderColor = info.borderColor;
-    samplerInfo.anisotropyEnable = VK_TRUE;
-    samplerInfo.maxAnisotropy = this->limits()->maxSamplerAnisotropy;
-    samplerInfo.unnormalizedCoordinates = VK_FALSE;
-    samplerInfo.compareEnable = VK_FALSE;
-    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-
-    VkSampler sampler;
-    auto sts = vkCreateSampler(this->_device, &samplerInfo, nullptr, &sampler);
-    if (sts != VK_SUCCESS) {
-        ERROR("unable to create texture sampler!");
-    }
-
-    return sampler;
-}
-
-// Get the list of supported extensions
-//
-std::vector<VkExtensionProperties> Application::supportedExtensions ()
-{
-    uint32_t extensionCount = 0;
-    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-    std::vector<VkExtensionProperties> extProps(extensionCount);
-    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extProps.data());
-    return extProps;
-}
-
-// Get the list of supported layers
-//
-std::vector<VkLayerProperties> Application::supportedLayers ()
-{
-    uint32_t layerCount = 0;
-    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-    std::vector<VkLayerProperties> layers(layerCount);
-    vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
-    return layers;
+    return pipes.value[0];
 }
 
 /******************** local utility functions ********************/
@@ -726,21 +705,16 @@ static std::vector<const char *> requiredExtensions (bool debug)
 
 // check the device's queue families for graphics and presentation support
 //
-bool Application::_getQIndices (VkPhysicalDevice dev)
+bool Application::_getQIndices (vk::PhysicalDevice dev)
 {
-    // first we figure out how many queue families the device supports
-    uint32_t qFamilyCount = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(dev, &qFamilyCount, nullptr);
-
-    // then we get the queue family info
-    std::vector<VkQueueFamilyProperties> qFamilies(qFamilyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(dev, &qFamilyCount, qFamilies.data());
+    // get the queue family info
+    auto qFamilies = dev.getQueueFamilyProperties();
 
     Application::Queues<int32_t> indices = { -1, -1 };
-    for (int i = 0;  i < qFamilyCount;  ++i) {
+    for (int i = 0;  i < qFamilies.size();  ++i) {
         // check for graphics support
         if ((indices.graphics < 0)
-        && (qFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
+        && (qFamilies[i].queueFlags & vk::QueueFlagBits::eGraphics)) {
             indices.graphics = i;
         }
         // check for presentation support
@@ -757,8 +731,81 @@ bool Application::_getQIndices (VkPhysicalDevice dev)
         }
     }
 
-
     return false;
+
+}
+
+/***** Debug callback support *****/
+
+constexpr int kMaxErrorCount = 20;
+constexpr int kMaxWarningCount = 50;
+
+static int errorCount = 0;
+static int warningCount = 0;
+
+// callback for debug messages
+static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback (
+    VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+    VkDebugUtilsMessageTypeFlagsEXT ty,
+    const VkDebugUtilsMessengerCallbackDataEXT* cbData,
+    void* usrData)
+{
+    std::cerr << "# " << cbData->pMessage << std::endl;
+
+    // check to see if we should terminate
+    if (severity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+        if (++errorCount > kMaxErrorCount) {
+            ERROR("too many validation errors");
+        }
+    } else if (severity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+        if (++warningCount > kMaxErrorCount) {
+            ERROR("too many validation warnings");
+        }
+    }
+
+    return VK_FALSE;
+}
+
+// set up the debug callback
+void Application::_initDebug ()
+{
+    auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr (
+        this->_instance,
+        "vkCreateDebugUtilsMessengerEXT");
+
+    if (func != nullptr) {
+        VkDebugUtilsMessengerCreateInfoEXT info{};
+        info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        info.messageSeverity =
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        info.messageType =
+            VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        info.pfnUserCallback = debugCallback;
+
+        VkDebugUtilsMessengerEXT debugMessenger;
+        auto sts = func (this->_instance, &info, nullptr, &this->_debugMessenger);
+        if (sts != VK_SUCCESS) {
+            ERROR("unable to set up debug messenger!");
+        }
+    } else {
+        ERROR("unable to get vkCreateDebugUtilsMessengerEXT address");
+    }
+
+}
+
+// clean up the debug callback
+void Application::_cleanupDebug ()
+{
+    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(
+        this->_instance,
+        "vkDestroyDebugUtilsMessengerEXT");
+    if (func != nullptr) {
+        func (this->_instance, this->_debugMessenger, nullptr);
+    }
 
 }
 

@@ -13,16 +13,10 @@ set(TARGET lab1)
 set(SRCS
   main.cpp)
 
-# path to include files
-include_directories(
-  ${GLFW_INCLUDE_DIR}
-  ${GLM_INCLUDE_DIR}
-  ${VULKAN_INCLUDE_DIR}
-  ${CS237_INCLUDE_DIR})
+# path to CS237 Library include files
+include_directories(${CS237_INCLUDE_DIR})
 
 add_executable(${TARGET} ${SRCS})
 
 target_link_libraries(${TARGET} cs237)
-target_link_libraries(${TARGET} ${GLFW_LIBRARY})
-target_link_libraries(${TARGET} ${VULKAN_LIBRARY})
-add_dependencies(${TARGET} Shaders)
+add_dependencies(${TARGET} Lab1Shaders)

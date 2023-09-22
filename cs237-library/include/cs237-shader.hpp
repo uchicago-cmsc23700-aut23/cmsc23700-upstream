@@ -19,12 +19,8 @@
 
 namespace cs237 {
 
-enum class ShaderKind {
-    Vertex = 0, Geometry, TessControl, TessEval, Fragment, Compute
-};
-
-//! A wrapper class for loading a pipeline of pre-compiled shaders from
-//! the file system.
+/// A wrapper class for loading a pipeline of pre-compiled shaders from
+/// the file system.
 //
 class Shaders {
   public:
@@ -32,43 +28,46 @@ class Shaders {
     /*! \brief load a pre-compiled shader program from the file system.
      *  \param device   the logical device that will run the shaders
      *  \param stem     the base name of the shader files
-     *  \param stages   a vector spcifying the shader stages that form the program.
-     *                  These should be in the standard order.
+     *  \param stages   a bitmask spcifying the shader stages that form the program.
+     *                  The flags that we support are: eVertex, eTessellationControl,
+     *                  eTessellationEvaluation, eFragment, and eCompute.
      *
      * This version of the constructor assumes that the shader programs all
      * have the same base filename and only differ in their file extensions.
      */
     Shaders (
-        VkDevice device,
+        vk::Device device,
         std::string const &stem,
-        std::vector<ShaderKind> const &stages);
+        vk::ShaderStageFlags stages);
 
     /* \brief load a pre-compiled shader program from the file system.
      *  \param device   the logical device that will run the shaders
-     *  \param files    a vector of the shader file names
-     *  \param stages   a vector spcifying the shader stages that form the program.
-     *                  These should be in the standard order and have the same
-     *                  number as the vector of files.
+     *  \param files    a vector of the shader file names; the order of the file
+     *                  names should be a subset of: vertex, tessellation control,
+     *                  tessellation evaluation, fragment, and compute.
+     *  \param stages   a bitmask spcifying the shader stages that form the program.
+     *                  The number of set bits should be equal to the number
+     *                  of elements in the `files` vector.
      */
     Shaders (
-        VkDevice device,
+        vk::Device device,
         std::vector<std::string> const &files,
-        std::vector<ShaderKind> const &stages);
+        vk::ShaderStageFlags stages);
 
     ~Shaders ();
 
-    //! return the number of shader stages in the pipeline
+    /// return the number of shader stages in the pipeline
     int numStages () const { return this->_stages.size(); }
 
-    //! return a pointer to the array of stage create infos
-    VkPipelineShaderStageCreateInfo *stages ()
+    /// return a pointer to the array of stage create infos
+    std::vector<vk::PipelineShaderStageCreateInfo> const &stages () const
     {
-        return this->_stages.data();
+        return this->_stages;
     }
 
   private:
-    VkDevice _device;
-    std::vector<VkPipelineShaderStageCreateInfo> _stages;
+    vk::Device _device;
+    std::vector<vk::PipelineShaderStageCreateInfo> _stages;
 
 }; // Shaders
 

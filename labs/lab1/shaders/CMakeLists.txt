@@ -9,8 +9,8 @@
 #
 
 set(SRCS
-  no-light.frag
-  no-light.vert)
+  shader.frag
+  shader.vert)
 
 # custom commands for compiling shaders
 #
@@ -27,5 +27,5 @@ foreach(SHADER_SRC ${SRCS})
 endforeach(SHADER_SRC)
 
 add_custom_target(
-  Shaders
+  Lab1Shaders
   DEPENDS ${SPIRV_BINARY_FILES})

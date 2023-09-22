@@ -29,35 +29,30 @@ namespace cs237 {
 //! The resources allocated by this function should be released by calling
 //! the `destroyVertexInputInfo` function.
 inline
-VkPipelineVertexInputStateCreateInfo vertexInputInfo (
-    std::vector<VkVertexInputBindingDescription> const &descs,
-    std::vector<VkVertexInputAttributeDescription> const &attrs)
+vk::PipelineVertexInputStateCreateInfo vertexInputInfo (
+    std::vector<vk::VertexInputBindingDescription> const &descs,
+    std::vector<vk::VertexInputAttributeDescription> const &attrs)
 {
-    VkPipelineVertexInputStateCreateInfo vertexInfo{};
-    vertexInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vk::PipelineVertexInputStateCreateInfo vertexInfo{};
 
     vertexInfo.vertexBindingDescriptionCount = descs.size();
     if (descs.size() > 0) {
         // we copy the data into the heap to ensure that it is still around
         // when we create the pipeline
-        auto pDescs = new VkVertexInputBindingDescription[descs.size()];
+        auto pDescs = new vk::VertexInputBindingDescription[descs.size()];
         for (int i = 0;  i < descs.size();  ++i) {
             pDescs[i] = descs[i];
         }
         vertexInfo.pVertexBindingDescriptions = pDescs;
-    } else {
-        vertexInfo.pVertexBindingDescriptions = nullptr;
     }
 
     vertexInfo.vertexAttributeDescriptionCount = attrs.size();
     if (attrs.size() > 0) {
-        auto pAttrs = new VkVertexInputAttributeDescription[attrs.size()];
+        auto pAttrs = new vk::VertexInputAttributeDescription[attrs.size()];
         for (int i = 0;  i < attrs.size();  ++i) {
             pAttrs[i] = attrs[i];
         }
         vertexInfo.pVertexAttributeDescriptions = pAttrs;
-    } else {
-        vertexInfo.pVertexAttributeDescriptions = nullptr;
     }
 
     return vertexInfo;
@@ -65,7 +60,7 @@ VkPipelineVertexInputStateCreateInfo vertexInputInfo (
 
 //! release resources allocated by vertexInputInfo
 inline
-void destroyVertexInputInfo (VkPipelineVertexInputStateCreateInfo &info)
+void destroyVertexInputInfo (vk::PipelineVertexInputStateCreateInfo &info)
 {
     if (info.pVertexBindingDescriptions != nullptr) {
         delete info.pVertexBindingDescriptions;

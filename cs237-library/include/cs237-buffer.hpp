@@ -19,92 +19,173 @@
 
 namespace cs237 {
 
-//! A base class for buffer objects of all kinds
+/// A base class for buffer objects of all kinds
 class Buffer {
 public:
-    VkBuffer vkBuffer () const { return this->_buf; }
+    /// get the Vulkan buffer object for this buffer
+    vk::Buffer vkBuffer () const { return this->_buf; }
 
-    void bindMemory (MemoryObj *memObj)
-    {
-        auto sts = vkBindBufferMemory(
-            this->_app->_device,
-            this->_buf,
-            memObj->_mem,
-            0);
-        if (sts != VK_SUCCESS) {
-            ERROR ("unable to bind buffer to memory object.");
-        }
-    }
+    /// get the memory object for this buffer
+    const MemoryObj *memory () const { return this->_mem; }
 
-    //! get the memory requirements of this buffer
-    VkMemoryRequirements requirements ()
+    /// get the memory requirements of this buffer
+    vk::MemoryRequirements requirements ()
     {
-        VkMemoryRequirements reqs;
-        vkGetBufferMemoryRequirements(this->_app->_device, this->_buf, &reqs);
+        vk::MemoryRequirements reqs;
+        this->_app->_device.getBufferMemoryRequirements(this->_buf, &reqs);
         return reqs;
     }
 
 protected:
-    Application *_app;          //!< the application
-    VkBuffer    _buf;           //!< the Vulkan buffer object
+    Application *_app;          ///< the application
+    vk::Buffer _buf;            ///< the Vulkan buffer object
+    MemoryObj *_mem;            ///< the Vulkan memory object that holds the buffer
 
-    Buffer (Application *app, VkBufferUsageFlags usage, size_t sz)
+    /// constructor
+    /// \param app    the owning application object
+    /// \param usage  specify the purpose of the buffer object
+    /// \param sz     the buffer's size in bytes
+    Buffer (Application *app, vk::BufferUsageFlags usage, size_t sz)
       : _app(app)
     {
-        VkBufferCreateInfo info{};
-        info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        info.pNext = nullptr;
-        info.usage = usage;
-        info.size = sz;
-        info.queueFamilyIndexCount = 0;
-        info.pQueueFamilyIndices = nullptr;
-        info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        info.flags = 0;
+        vk::BufferCreateInfo info(
+            {}, /* flags */
+            sz,
+            usage,
+            vk::SharingMode::eExclusive, /* sharingMode */
+            {}); /* queueFamilyIndices */
 
-        auto sts = vkCreateBuffer (app->_device, &info, nullptr, &this->_buf);
-        if (sts != VK_SUCCESS) {
-            ERROR ("unable to create buffer object.");
-        }
+        this->_buf = app->_device.createBuffer (info);
+        this->_mem = new MemoryObj(app, this->requirements());
+
+        // bind the memory object to the buffer
+        this->_app->_device.bindBufferMemory(this->_buf, this->_mem->_mem, 0);
+
     }
 
+    /// destructor
     ~Buffer ()
     {
-        vkDestroyBuffer (this->_app->_device, this->_buf, nullptr);
+        delete this->_mem;
+        this->_app->_device.destroyBuffer (this->_buf, nullptr);
     }
+
+    /// copy data to a subrange of the device memory object
+    /// \param src     address of data to copy
+    /// \param offset  offset (in bytes) from the beginning of the buffer
+    ///                to copy the data to
+    /// \param sz      size in bytes of the data to copy
+    void _copyTo (const void *src, size_t offset, size_t sz)
+    {
+        this->_mem->copyTo(src, offset, sz);
+    }
+
+    /// copy data to the device memory object
+    /// \param src  address of data to copy
+    void _copyTo (const void *src) { this->_mem->copyTo(src); }
 
 };
 
-//! Buffer class for vertex data
+/// Buffer class for vertex data; the type parameter `V` is the type of an
+/// individual vertex.
+template <typename V>
 class VertexBuffer : public Buffer {
 public:
 
-    VertexBuffer (Application *app, size_t sz)
-      : Buffer (app, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sz)
+    /// the type of vertices
+    using VertexType = V;
+
+    /// constructor
+    /// \param app     the owning application object
+    /// \param nVerts  the number of vertices in the buffer
+    VertexBuffer (Application *app, uint32_t nVerts)
+      : Buffer (app, vk::BufferUsageFlagBits::eVertexBuffer, nVerts*sizeof(V))
     { }
+
+    /// copy vertices to the device memory object
+    /// \param src  proxy array of vertices
+    void copyTo (vk::ArrayProxy<V> const &src)
+    {
+        assert ((src.size() * sizeof(V) <= this->_mem->size()) && "src is too large");
+        this->_copyTo(src.data(), 0, src.size()*sizeof(V));
+    }
+
+    /// copy vertices to the device memory object
+    /// \param src     proxy array of vertices
+    /// \param offset  offset from the beginning of the buffer to copy the data to
+    void copyTo (vk::ArrayProxy<V> const &src, uint32_t offset)
+    {
+        assert (((src.size()+offset) * sizeof(V) <= this->_mem->size())
+            && "src is too large");
+        this->_copyTo(src.data(), offset*sizeof(V), src.size()*sizeof(V));
+    }
+
 };
 
-//! Buffer class for index data
+/// Buffer class for index data; the type parameter `I` is the index type.
+template <typename I>
 class IndexBuffer : public Buffer {
 public:
 
-    IndexBuffer (Application *app, uint32_t nIndices, size_t sz)
-      : Buffer (app, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, sz), _nIndices(nIndices)
+    /// the type of indices
+    using IndexType = I;
+
+    /// constructor
+    /// \param app       the owning application object
+    /// \param nIndices  the number of indices in the buffer
+    IndexBuffer (Application *app, uint32_t nIndices)
+      : Buffer (app, vk::BufferUsageFlagBits::eIndexBuffer, nIndices*sizeof(I)),
+        _nIndices(nIndices)
     { }
 
+    /// get the number of indices in the buffer
     uint32_t nIndices () const { return this->_nIndices; }
+
+    /// copy indices to the device memory object
+    /// \param src  proxy array of indices
+    void copyTo (vk::ArrayProxy<I> const &src)
+    {
+        assert ((src.size() * sizeof(I) <= this->_mem->size()) && "src is too large");
+        this->_copyTo(src.data(), 0, src.size()*sizeof(I));
+    }
+
+    /// copy vertices to the device memory object
+    /// \param src     proxy array of indices
+    /// \param offset  offset from the beginning of the buffer to copy the data to
+    void copyTo (vk::ArrayProxy<I> const &src, uint32_t offset)
+    {
+        assert (((src.size()+offset) * sizeof(I) <= this->_mem->size())
+            && "src is too large");
+        this->_copyTo(src.data(), offset*sizeof(I), src.size()*sizeof(I));
+    }
 
 private:
     uint32_t _nIndices;
 
 };
 
-//! Buffer class for uniform data
+/// Buffer class for uniform data; the type parameter `UB` is the C++
+/// struct type of the buffer contents
+template <typename UB>
 class UniformBuffer : public Buffer {
 public:
 
-    UniformBuffer (Application *app, size_t sz)
-      : Buffer (app, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sz)
+    /// the type of the buffer's contents
+    using BufferType = UB;
+
+    /// constructor
+    /// \param app  the owning application object
+    UniformBuffer (Application *app)
+      : Buffer (app, vk::BufferUsageFlagBits::eUniformBuffer, sizeof(UB))
     { }
+
+    /// copy indices to the device memory object
+    /// \param[in] src  the buffer contents to copy to the Vulkan memory buffer
+    void copyTo (UB const &src)
+    {
+        this->_copyTo(&src, 0, sizeof(UB));
+    }
+
 };
 
 } // namespace cs237

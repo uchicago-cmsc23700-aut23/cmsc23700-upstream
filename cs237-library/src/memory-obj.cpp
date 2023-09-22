@@ -14,27 +14,23 @@
 
 namespace cs237 {
 
-MemoryObj::MemoryObj (Application *app, VkMemoryRequirements const &reqs)
+MemoryObj::MemoryObj (Application *app, vk::MemoryRequirements const &reqs)
   : _app(app), _sz(reqs.size)
 {
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    // the allocated memory size must be a multiple of the alignment
-    allocInfo.allocationSize =
-        (reqs.size + reqs.alignment - 1) & ~(reqs.alignment - 1);
-    allocInfo.memoryTypeIndex = app->_findMemory(
-        reqs.memoryTypeBits,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    vk::MemoryAllocateInfo allocInfo(
+        // the allocated memory size must be a multiple of the alignment
+        (reqs.size + reqs.alignment - 1) & ~(reqs.alignment - 1),
+        app->_findMemory(
+            reqs.memoryTypeBits,
+            vk::MemoryPropertyFlagBits::eHostVisible
+            | vk::MemoryPropertyFlagBits::eHostCoherent));
 
-    auto sts = vkAllocateMemory(app->_device, &allocInfo, nullptr, &this->_mem);
-    if (sts != VK_SUCCESS) {
-        ERROR("failed to allocate vertex buffer memory!");
-    }
+    this->_mem = app->_device.allocateMemory(allocInfo);
 }
 
 MemoryObj::~MemoryObj ()
 {
-    vkFreeMemory (this->_app->_device, this->_mem, nullptr);
+    this->_app->_device.freeMemory (this->_mem);
 }
 
 } // namespace cs237

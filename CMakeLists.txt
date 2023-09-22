@@ -39,33 +39,29 @@ set(CMAKE_MODULE_PATH
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules"
   )
 
-# find GLM, GLFW, and Vulkan; note that the naming conventions for GLFW and
-# Vulkan differ between macOS and Linux
-find_package(GLM 0.9.9 REQUIRED)
+# find libraries that we need
+
 find_package(GLFW 3.3 REQUIRED)
+
 find_package(Vulkan 1.3 REQUIRED)
-if (${CMAKE_HOST_APPLE})
-  # compiler for shader programs
-  #
+if (NOT ${CMAKE_HOST_APPLE})
+  find_package(X11 REQUIRED)
+endif()
+
+# compiler for shader programs
+#
+if (Vulkan_GLSLANG_VALIDATOR_EXECUTABLE)
+  set(GLSLC ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE})
+elseif (VULKAN_BIN_DIR)
   set(GLSLC "${VULKAN_BIN_DIR}/glslangValidator")
 else()
-  find_package(X11 REQUIRED)
-
-  # compiler for shader programs
-  #
-  if (Vulkan_GLSLANG_VALIDATOR_EXECUTABLE)
-    set(GLSLC ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE})
-  elseif (VULKAN_BIN_DIR)
-    set(GLSLC "${VULKAN_BIN_DIR}/glslangValidator")
-  else()
-    message(FATAL_ERROR "unable to determine where glslangValidator lives")
-  endif()
-  #
-  if (Vulkan_LIBRARY)
-    set (VULKAN_LIBRARY ${Vulkan_LIBRARY})
-  endif()
-
+  message(FATAL_ERROR "unable to determine where glslangValidator lives")
 endif()
+#
+if (Vulkan_LIBRARY)
+  set (VULKAN_LIBRARY ${Vulkan_LIBRARY})
+endif()
+
 find_package(PNG 1.5 REQUIRED)
 
 option (CS237_ENABLE_DOXYGEN "Enable doxygen for generating cs237 library documentation." OFF)
@@ -85,31 +81,22 @@ configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/cs237-library/include/cs237-config.h
   @ONLY)
 
-if (CS237_ENABLE_DOXYGEN)
-  message(STATUS "Doxygen enabled.")
-  find_package(Doxygen REQUIRED)
-  if (DOXYGEN_FOUND)
-   # TODO
-  endif()
-endif()
-
 # path to include files
 include_directories(
   ${GLFW_INCLUDE_DIR}
-  ${GLM_INCLUDE_DIR}
   ${Vulkan_INCLUDE_DIR}
   ${PNG_INCLUDE_DIR}
   ${CS237_INCLUDE_DIR})
 
 # libraries
-link_libraries(${PNG_LIBRARY})
-link_libraries(${Vulkan_LIBRARY})
 link_libraries(${GLFW_LIBRARY})
+link_libraries(${VULKAN_LIBRARY})
+link_libraries(${PNG_LIBRARY})
 
 # on Linux, we need X11
 if (${CMAKE_HOST_LINUX})
-include_directories(${X11_INCLUDE_DIR})
-link_libraries(${X11_LIBRARIES})
+  include_directories(${X11_INCLUDE_DIR})
+  link_libraries(${X11_LIBRARIES})
 endif()
 
 # cs237 library
@@ -120,9 +107,9 @@ set(CS237_DOXYGEN_HTML_DIR ${CMAKE_SOURCE_DIR}/cs237-library/doc)
 
 # the subdirectory for the labs
 #
-#add_subdirectory(labs EXCLUDE_FROM_ALL)
+add_subdirectory(labs EXCLUDE_FROM_ALL)
 
-# the subdirectory for the projects
+# the subdirectory for the individual projects
 #
-#add_subdirectory(projs EXCLUDE_FROM_ALL)
+#add_subdirectory(projects EXCLUDE_FROM_ALL)
 
