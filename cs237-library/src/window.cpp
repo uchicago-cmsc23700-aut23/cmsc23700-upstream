@@ -411,7 +411,7 @@ vk::PresentModeKHR Window::SwapChainDetails::choosePresentMode ()
     return vk::PresentModeKHR::eFifo;
 }
 
-//! compute the extent of the buffers
+// compute the extent of the buffers
 vk::Extent2D Window::SwapChainDetails::chooseExtent (GLFWwindow *win)
 {
     if (this->capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
@@ -538,7 +538,6 @@ vk::ResultValue<uint32_t> Window::SyncObjs::acquireNextImage ()
         VK_NULL_HANDLE);
 }
 
-//! reset the in-flight fence of this frame
 void Window::SyncObjs::reset ()
 {
     assert (this->inFlight);
@@ -547,9 +546,6 @@ void Window::SyncObjs::reset ()
 
 }
 
-//! submit a command buffer to a queue using this frame's synchronization objects
-//! \param q        the queue to submit the commands to
-//! \param cmdBuf   the command buffer to submit
 void Window::SyncObjs::submitCommands (vk::Queue q, vk::CommandBuffer const &cmdBuf)
 {
     assert (this->imageAvailable);
@@ -565,9 +561,6 @@ void Window::SyncObjs::submitCommands (vk::Queue q, vk::CommandBuffer const &cmd
 
 }
 
-//! \brief present the frame
-//! \param q  the presentation queue
-//! \return the return status of presenting the image
 vk::Result Window::SyncObjs::present (vk::Queue q, uint32_t imageIndex)
 {
     vk::PresentInfoKHR presentInfo(
