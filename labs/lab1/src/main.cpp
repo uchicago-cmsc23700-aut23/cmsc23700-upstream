@@ -18,6 +18,7 @@
 #include "cs237.hpp"
 
 #ifdef CS237_BINARY_DIR
+/// location of the shaders for Lab 1
 const std::string kShaderDir = CS237_BINARY_DIR "/labs/lab1/shaders/";
 #else
 # error CS237_BINARY_DIR not defined
