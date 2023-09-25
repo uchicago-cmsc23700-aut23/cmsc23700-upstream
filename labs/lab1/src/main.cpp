@@ -57,7 +57,6 @@ private:
     vk::RenderPass _renderPass;
     vk::PipelineLayout _pipelineLayout;
     vk::Pipeline _graphicsPipeline;
-    std::vector<vk::Framebuffer> _framebuffers;
     vk::CommandPool _cmdPool;
     vk::CommandBuffer _cmdBuf;
     SyncObjs _syncObjs;

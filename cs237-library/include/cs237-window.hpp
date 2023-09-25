@@ -88,8 +88,7 @@ public:
     /// window.  It is called by Refresh.
     virtual void draw () = 0;
 
-    /// method invoked on Reshape events.  It resets the viewport and the
-    /// projection matrix (see SetProjectionMatrix)
+    /// method invoked on Reshape events.
     virtual void reshape (int wid, int ht);
 
     /// method invoked on Iconify events.
@@ -138,6 +137,8 @@ protected:
     };
 
     struct DepthStencilBuffer {
+        bool depth;                     ///< true if depth-buffer is supported
+        bool stencil;                   ///< true if stencil-buffer is supported
         vk::Format format;              ///< the depth/image-buffer format
         vk::Image image;                ///< depth/image-buffer image
         vk::DeviceMemory imageMem;      ///< device memory for depth/image-buffer
@@ -156,6 +157,7 @@ protected:
         std::vector<vk::Image> images;  ///< images for the swap buffers
         std::vector<vk::ImageView> views; ///< image views for the swap buffers
         std::optional<DepthStencilBuffer> dsBuf; ///< optional depth/stencil-buffer
+        std::vector<vk::Framebuffer> fBufs; ///< frame buffers
 
         SwapChain (vk::Device dev)
           : device(dev), dsBuf(std::nullopt)
@@ -165,7 +167,19 @@ protected:
         int size () const { return this->images.size(); }
 
         /// \brief allocate frame buffers for a rendering pass
-        std::vector<vk::Framebuffer> framebuffers (vk::RenderPass renderPass);
+        void initFramebuffers (vk::RenderPass renderPass);
+
+        /// \brief does the swap-chain support a depth buffer?
+        bool hasDepthBuffer () const
+        {
+            return this->dsBuf.has_value() && this->dsBuf->depth;
+        }
+
+        /// \brief does the swap-chain support a stencil buffer?
+        bool hasStencilBuffer () const
+        {
+            return this->dsBuf.has_value() && this->dsBuf->stencil;
+        }
 
         /// \brief destroy the Vulkan state for the swap chain
         void cleanup ();
@@ -178,7 +192,8 @@ protected:
                                         ///  image object is available
         vk::Semaphore renderFinished;   ///< semaphore for signaling when render pass
                                         ///  is finished
-        vk::Fence inFlight;             ///< fence for
+        vk::Fence inFlight;             ///< fence for synchronizing on the termination
+                                        ///  of the rendering operation
 
         /// \brief create a SyncObjs container
         explicit SyncObjs (Window *w)
@@ -240,11 +255,16 @@ protected:
     /// \brief Get the swap-chain details for a physical device
     SwapChainDetails _getSwapChainDetails ();
 
-    /// \brief Create the swap chain for this window; this initialized the _swap
+    /// \brief Create the swap chain for this window; this initializes the _swap
     ///        instance variable.
     /// \param depth    set to true if requesting depth-buffer support
     /// \param stencil  set to true if requesting stencil-buffer support
     void _createSwapChain (bool depth, bool stencil);
+
+    /// \brief Recreate the swap chain for this window; this redefines the _swap
+    ///        instance variable and is used when some aspect of the presentation
+    ///        surface changes.
+    void _recreateSwapChain ();
 
     /// \brief initialize the attachment descriptors and references for the color and
     ///        optional depth/stencil-buffer
@@ -264,11 +284,47 @@ protected:
     /// This is a wrapper to allow subclasses access to this information
     uint32_t _presentationQIdx () const { return this->_app->_qIdxs.present; }
 
+    /// \brief get the natural viewport for the window
+    /// \param oglView  if `true` then use the **OpenGL** convention where
+    ///                 Y = 0 maps to the bottom of the screen and Y increases
+    ///                 going up.
+    /// \return a viewport that covers the extent of the window
+    vk::Viewport _getViewport (bool oglView = false)
+    {
+        if (oglView) {
+            // to get the OpenGL-style viewport, we set the origin at Y = height
+            // and use a negative height
+            return vk::Viewport(
+                0.0f,
+                float(this->_swap.extent.width),
+                float(this->_swap.extent.width),
+                float(-this->_swap.extent.height),
+                0.0f, /* min depth */
+                1.0f);
+        } else {
+            return vk::Viewport(
+                0.0f, 0.0f,
+                float(this->_swap.extent.width),
+                float(this->_swap.extent.height),
+                0.0f, /* min depth */
+                1.0f); /* max depth */
+        }
+    }
+
+    /// \brief get the scissors rectangle for this window
+    /// \return a rectangle that covers the extent of the window
+    vk::Rect2D _getScissorsRect ()
+    {
+        return vk::Rect2D(
+            {0, 0},
+            {this->_swap.extent.width, this->_swap.extent.height});
+    }
+
     /// \brief add a command to set the viewport and scissor to the whole window
-    ///        using the OpenGL convention of Y increasing up the screen.
     /// \param cmdBuf   the command buffer
     /// \param oglView  if `true` then use the **OpenGL** convention where
-    ///                 Y = 0 maps to the bottom of the screen
+    ///                 Y = 0 maps to the bottom of the screen and Y increases
+    ///                 going up.
     ///
     /// **Vulkan** follows the Direct3D convention of using a right-handed NDC
     /// space, which means that Y = 0 maps to the top of the screen, instead

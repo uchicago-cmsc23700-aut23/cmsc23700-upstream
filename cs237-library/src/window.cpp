@@ -135,6 +135,10 @@ void Window::reshape (int wid, int ht)
 {
     this->_wid = wid;
     this->_ht = ht;
+
+    // recreate the swap chain, etc.  Note that we leave recreating the framebuffers
+    // to the subclass, since we do not have access to the render pass here
+    this->_recreateSwapChain ();
 }
 
 void Window::iconify (bool iconified)
@@ -311,6 +315,8 @@ void Window::_createSwapChain (bool depth, bool stencil)
     if (dsFormat != vk::Format::eUndefined) {
         // initialize the depth/stencil-buffer
         DepthStencilBuffer dsBuf;
+        dsBuf.depth = depth;
+        dsBuf.stencil = stencil;
         dsBuf.format = dsFormat;
         dsBuf.image = this->_app->_createImage(
             extent.width, extent.height,
@@ -326,6 +332,22 @@ void Window::_createSwapChain (bool depth, bool stencil)
             vk::ImageAspectFlagBits::eDepth);
         this->_swap.dsBuf = dsBuf;
     }
+}
+
+void Window::_recreateSwapChain ()
+{
+    // wait until any in-flight rendering is complete
+    this->device().waitIdle();
+
+    // remember the configuration
+    bool hasDB = this->_swap.hasDepthBuffer();
+    bool hasStencil = this->_swap.hasStencilBuffer();
+
+    // cleanup the existing swapchain
+    this->_swap.cleanup();
+
+    // initialize a new swap-chain etc.
+    this->_createSwapChain(hasDB, hasStencil);
 }
 
 void Window::_initAttachments (
@@ -441,9 +463,10 @@ vk::Extent2D Window::SwapChainDetails::chooseExtent (GLFWwindow *win)
 
 /******************** struct Window::SwapChain methods ********************/
 
-std::vector<vk::Framebuffer> Window::SwapChain::framebuffers (vk::RenderPass renderPass)
+void Window::SwapChain::initFramebuffers (vk::RenderPass renderPass)
 {
     assert (this->size() > 0);
+    assert (this->fBufs.size() == 0);
 
     // the framebuffer attachments; currently we only have color, but we will add
     // a depth buffer
@@ -466,21 +489,27 @@ std::vector<vk::Framebuffer> Window::SwapChain::framebuffers (vk::RenderPass ren
         this->extent.width, this->extent.height, 1);
 
     // create a frambuffer per swap-chain image
-    std::vector<vk::Framebuffer> fbs;
-    fbs.reserve(this->size());
+    this->fBufs.reserve(this->size());
     for (size_t i = 0; i < this->size(); i++) {
         attachments[0] = this->views[i];
-        fbs.push_back(this->device.createFramebuffer(fbInfo));
+        this->fBufs.push_back(this->device.createFramebuffer(fbInfo));
     }
 
-    return fbs;
 }
 
 void Window::SwapChain::cleanup ()
 {
+    // destroy framebuffers
+    for (auto fb : this->fBufs) {
+        this->device.destroyFramebuffer(fb);
+    }
+    this->fBufs.clear();
+
+    // destroy the views
     for (auto view : this->views) {
         this->device.destroyImageView(view, nullptr);
     }
+    this->views.clear();
     /* note that the images are owned by the swap chain object, so we do not have
      * to destroy them.
      */
