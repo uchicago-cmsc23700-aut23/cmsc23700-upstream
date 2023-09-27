@@ -21,4 +21,6 @@ There are several options to `cmake` that you might want to specify:
 
 * `-DCMAKE_BUILD_TYPE=Release` specifies that a "release" build should
   be generated (the default is a "debug" build).  While a "release"
-  build is faster (because there is less error checking),
+  build is faster (because there is less error checking), we recommend
+  the debug build for its greater runtime error checking.
+
