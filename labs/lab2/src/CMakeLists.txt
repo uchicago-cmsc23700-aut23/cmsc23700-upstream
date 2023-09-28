@@ -1,0 +1,22 @@
+# CMake configuration for lab assignment 2 sources
+#
+# CMSC 23700 -- Introduction to Computer Graphics
+# Autumn 2023
+# University of Chicago
+#
+# COPYRIGHT (c) 2023 John Reppy
+# All rights reserved.
+#
+
+set(TARGET lab2)
+
+set(SRCS
+  main.cpp)
+
+# path to CS237 Library include files
+include_directories(${CS237_INCLUDE_DIR})
+
+add_executable(${TARGET} ${SRCS})
+
+target_link_libraries(${TARGET} cs237)
+add_dependencies(${TARGET} Lab2Shaders)
