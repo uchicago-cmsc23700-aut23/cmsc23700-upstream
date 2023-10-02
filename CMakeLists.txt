@@ -82,6 +82,7 @@ configure_file(
   @ONLY)
 
 # path to include files
+set(CS237_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/cs237-library/include)
 include_directories(
   ${GLFW_INCLUDE_DIR}
   ${Vulkan_INCLUDE_DIR}
@@ -102,7 +103,6 @@ endif()
 # cs237 library
 #
 add_subdirectory(cs237-library)
-set(CS237_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/cs237-library/include)
 set(CS237_DOXYGEN_HTML_DIR ${CMAKE_SOURCE_DIR}/cs237-library/doc)
 
 # the subdirectory for the labs

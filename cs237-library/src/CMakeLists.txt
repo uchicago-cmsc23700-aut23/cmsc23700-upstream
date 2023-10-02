@@ -22,13 +22,6 @@ set(SRCS
   shader.cpp
   texture.cpp)
 
-# path to include files
-include_directories(
-  ${GLFW_INCLUDE_DIR}
-  ${GLM_INCLUDE_DIR}
-  ${VULKAN_INCLUDE_DIR}
-  ../include)
-
 add_library(cs237
   STATIC
   ${SRCS})
