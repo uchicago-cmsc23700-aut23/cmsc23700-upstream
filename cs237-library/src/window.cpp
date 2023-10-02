@@ -468,9 +468,8 @@ void Window::SwapChain::initFramebuffers (vk::RenderPass renderPass)
     assert (this->size() > 0);
     assert (this->fBufs.size() == 0);
 
-    // the framebuffer attachments; currently we only have color, but we will add
-    // a depth buffer
-    vk::ImageView attachments[this->numAttachments];
+    // the framebuffer attachments
+    vk::ImageView attachments[2] = {nullptr, nullptr};
 
     if (this->dsBuf.has_value()) {
         assert (this->numAttachments == 2);
