@@ -79,7 +79,7 @@ public:
     Lab2 (std::vector<std::string> const &args);
 
     /// destructor
-    ~Lab2 ();
+    ~Lab2 () override;
 
     /// run the application code
     void run () override;
@@ -132,14 +132,88 @@ Lab2Window::Lab2Window (Lab2 *app)
 {
     this->_initRenderPass ();
     this->_initPipeline ();
+
+    // create framebuffers for the swap chain
+    this->_swap.initFramebuffers (this->_renderPass);
+
+    // set up the command pool
+    vk::CommandPoolCreateInfo poolInfo(
+        vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+        this->_graphicsQIdx());
+
+    this->_cmdPool = this->device().createCommandPool(poolInfo);
+
+    // set up the command buffer
+    vk::CommandBufferAllocateInfo allocInfo(
+        this->_cmdPool,
+        vk::CommandBufferLevel::ePrimary,
+        1);
+
+    auto bufs = this->device().allocateCommandBuffers(allocInfo);
+    this->_cmdBuf = bufs[0];
+
+    // allocate synchronization objects
+    this->_syncObjs.allocate();
+
 }
 
 Lab2Window::~Lab2Window ()
 {
+    /* delete the command buffer */
+    this->device().freeCommandBuffers(this->_cmdPool, this->_cmdBuf);
+
+    /* delete the command pool */
+    this->device().destroyCommandPool(this->_cmdPool);
+
+    this->device().destroyPipeline(this->_graphicsPipeline);
+    this->device().destroyPipelineLayout(this->_pipelineLayout);
+    this->device().destroyRenderPass(this->_renderPass);
 }
 
 void Lab2Window::_initRenderPass ()
 {
+    // we have a single output framebuffer as the attachment
+    vk::AttachmentDescription colorAttachment(
+        {}, /* flags */
+        this->_swap.imageFormat, /* image-view format */
+        vk::SampleCountFlagBits::e1, /* number of samples */
+        vk::AttachmentLoadOp::eClear, /* load op */
+        vk::AttachmentStoreOp::eStore, /* store op */
+        vk::AttachmentLoadOp::eDontCare, /* stencil load op */
+        vk::AttachmentStoreOp::eDontCare, /* stencil store op */
+        vk::ImageLayout::eUndefined, /* initial layout */
+        vk::ImageLayout::ePresentSrcKHR); /* final layout */
+
+    vk::AttachmentReference colorAttachmentRef(
+        0, /* index */
+        vk::ImageLayout::eColorAttachmentOptimal); /* layout */
+
+    vk::SubpassDescription subpass(
+        {}, /* flags */
+        vk::PipelineBindPoint::eGraphics, /* pipeline bind point */
+        {}, /* input attachments */
+        colorAttachmentRef, /* color attachments */
+        {}, /* resolve attachments */
+        {}, /* depth-stencil attachment */
+        {}); /* preserve attachments */
+
+    vk::SubpassDependency dependency(
+        VK_SUBPASS_EXTERNAL, /* src subpass */
+        0, /* dst subpass */
+        vk::PipelineStageFlagBits::eColorAttachmentOutput, /* src stage mask */
+        vk::PipelineStageFlagBits::eColorAttachmentOutput, /* dst stage mask */
+        {}, /* src access mask */
+        { vk::AccessFlagBits::eColorAttachmentWrite }, /* dst access mask */
+        {}); /* dependency flags */
+
+    vk::RenderPassCreateInfo renderPassInfo(
+        {}, /* flags */
+        colorAttachment, /* attachments */
+        subpass, /* subpasses_ */
+        dependency); /* dependencies */
+
+    this->_renderPass = this->device().createRenderPass(renderPassInfo);
+
 }
 
 void Lab2Window::_initPipeline ()
@@ -152,10 +226,53 @@ void Lab2Window::_initVertexBuffer ()
 
 void Lab2Window::_recordCommandBuffer (uint32_t imageIdx)
 {
+    vk::CommandBufferBeginInfo beginInfo;
+    this->_cmdBuf.begin(beginInfo);
+
+    vk::ClearValue blackColor(vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f));
+    vk::RenderPassBeginInfo renderPassInfo(
+        this->_renderPass,
+        this->_swap.fBufs[imageIdx],
+        { {0, 0}, this->_swap.extent }, /* render area */
+        blackColor); /* clear the window to black */
+
+    this->_cmdBuf.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+
+    /*** BEGIN COMMANDS ***/
+    this->_cmdBuf.bindPipeline(
+        vk::PipelineBindPoint::eGraphics,
+        this->_graphicsPipeline);
+
+    /*** END COMMANDS ***/
+
+    this->_cmdBuf.endRenderPass();
+
+    this->_cmdBuf.end();
+
+}
+
+void Lab2Window::reshape (int wid, int ht)
+{
 }
 
 void Lab2Window::draw ()
 {
+    // next buffer from the swap chain
+    auto imageIndex = this->_syncObjs.acquireNextImage ();
+    if (imageIndex.result != vk::Result::eSuccess) {
+        ERROR("inable to acquire next image");
+    }
+
+    this->_syncObjs.reset();
+
+    this->_cmdBuf.reset();
+    this->_recordCommandBuffer (imageIndex.value);
+
+    // set up submission for the graphics queue
+    this->_syncObjs.submitCommands (this->graphicsQ(), this->_cmdBuf);
+
+    // set up submission for the presentation queue
+    this->_syncObjs.present (this->presentationQ(), imageIndex.value);
 }
 
 void Lab2Window::key (int key, int scancode, int action, int mods)
@@ -165,13 +282,26 @@ void Lab2Window::key (int key, int scancode, int action, int mods)
 /******************** Lab2 class ********************/
 
 Lab2::Lab2 (std::vector<std::string> const &args)
-  : cs237::Application (args, "CS237 Lab 1")
+  : cs237::Application (args, "CS237 Lab 2")
 { }
 
 Lab2::~Lab2 () { }
 
 void Lab2::run ()
 {
+    Lab2Window *win = new Lab2Window (this);
+
+    // wait until the window is closed
+    while(! win->windowShouldClose()) {
+        glfwPollEvents();
+        win->draw ();
+    }
+
+    // wait until any in-flight rendering is complete
+    this->_device.waitIdle();
+
+    // cleanup
+    delete win;
 }
 
 /******************** main ********************/

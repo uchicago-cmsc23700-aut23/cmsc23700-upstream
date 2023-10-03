@@ -13,9 +13,6 @@ set(TARGET lab2)
 set(SRCS
   main.cpp)
 
-# path to CS237 Library include files
-include_directories(${CS237_INCLUDE_DIR})
-
 add_executable(${TARGET} ${SRCS})
 
 target_link_libraries(${TARGET} cs237)
