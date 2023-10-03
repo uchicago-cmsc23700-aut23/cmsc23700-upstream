@@ -31,13 +31,25 @@ struct CreateWindowInfo {
     bool depth;         ///< do we need depth-buffer support?
     bool stencil;       ///< do we need stencil-buffer support?
 
+    /// constructor
+    /// \param w  window width in pixels
+    /// \param h  window height in pixels
+    /// \param t  window title string
+    /// \param r  boolean flag to specify that the window is resizable
+    /// \param d  boolean flag to specify that the window has a depth buffer
+    /// \param s  boolean flag to specify that the window has a stencil buffer
     CreateWindowInfo (int w, int h, std::string const &t, bool r, bool d, bool s)
         : wid(w), ht(h), title(t), resizable(r), depth(d), stencil(s)
     { }
+
+    /// constructor
+    /// \param w  window width in pixels
+    /// \param h  window height in pixels
     CreateWindowInfo (int w, int h)
         : wid(w), ht(h), title(""), resizable(false), depth(true), stencil(false)
     { }
 
+    /// do we need a depth/stencil buffer for the window?
     bool needsDepthBuf () const { return this->depth || this->stencil; }
 };
 
@@ -89,6 +101,12 @@ public:
     virtual void draw () = 0;
 
     /// method invoked on Reshape events.
+    /// \param wid  specifies the width of the viewport
+    /// \param ht   specifies the height of the viewport
+    ///
+    /// This method takes care of updating the cached size of the window and
+    /// recreating the swap chain.  Other updates, including allocating new
+    /// framebuffers should be handled by overriding this method in the subclass.
     virtual void reshape (int wid, int ht);
 
     /// method invoked on Iconify events.
