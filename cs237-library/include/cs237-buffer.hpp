@@ -102,6 +102,15 @@ public:
       : Buffer (app, vk::BufferUsageFlagBits::eVertexBuffer, nVerts*sizeof(V))
     { }
 
+    /// constructor with initialization
+    /// \param app  the owning application object
+    /// \param src  the array of vertices used to initialize the buffer
+    VertexBuffer (Application *app, vk::ArrayProxy<V> const &src)
+      : VertexBuffer(app, src.size())
+    {
+        this->_copyTo(src);
+    }
+
     /// copy vertices to the device memory object
     /// \param src  proxy array of vertices
     void copyTo (vk::ArrayProxy<V> const &src)
@@ -138,11 +147,20 @@ public:
         _nIndices(nIndices)
     { }
 
+    /// constructor with initialization
+    /// \param app  the owning application object
+    /// \param src  the array of indices used to initialize the buffer
+    IndexBuffer (Application *app, vk::ArrayProxy<I> const &src)
+      : IndexBuffer(app, src.size())
+    {
+        this->_copyTo(src);
+    }
+
     /// get the number of indices in the buffer
     uint32_t nIndices () const { return this->_nIndices; }
 
     /// copy indices to the device memory object
-    /// \param src  proxy array of indices
+    /// \param src  the array of indices that are copied to the buffer
     void copyTo (vk::ArrayProxy<I> const &src)
     {
         assert ((src.size() * sizeof(I) <= this->_mem->size()) && "src is too large");
@@ -150,7 +168,7 @@ public:
     }
 
     /// copy vertices to the device memory object
-    /// \param src     proxy array of indices
+    /// \param src     the array of indices that are copied to the buffer
     /// \param offset  offset from the beginning of the buffer to copy the data to
     void copyTo (vk::ArrayProxy<I> const &src, uint32_t offset)
     {
@@ -178,6 +196,15 @@ public:
     UniformBuffer (Application *app)
       : Buffer (app, vk::BufferUsageFlagBits::eUniformBuffer, sizeof(UB))
     { }
+
+    /// constructor with initialization
+    /// \param app      the owning application object
+    /// \param[in] src  the buffer contents to copy to the Vulkan memory buffer
+    UniformBuffer (Application *app, UB const &src)
+      : UniformBuffer(app)
+    {
+        this->_copyTo(src);
+    }
 
     /// copy indices to the device memory object
     /// \param[in] src  the buffer contents to copy to the Vulkan memory buffer
