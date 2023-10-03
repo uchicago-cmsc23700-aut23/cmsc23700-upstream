@@ -108,7 +108,7 @@ public:
     VertexBuffer (Application *app, vk::ArrayProxy<V> const &src)
       : VertexBuffer(app, src.size())
     {
-        this->_copyTo(src);
+        this->copyTo(src);
     }
 
     /// copy vertices to the device memory object
@@ -153,7 +153,7 @@ public:
     IndexBuffer (Application *app, vk::ArrayProxy<I> const &src)
       : IndexBuffer(app, src.size())
     {
-        this->_copyTo(src);
+        this->copyTo(src);
     }
 
     /// get the number of indices in the buffer
@@ -203,7 +203,7 @@ public:
     UniformBuffer (Application *app, UB const &src)
       : UniformBuffer(app)
     {
-        this->_copyTo(src);
+        this->copyTo(src);
     }
 
     /// copy indices to the device memory object
