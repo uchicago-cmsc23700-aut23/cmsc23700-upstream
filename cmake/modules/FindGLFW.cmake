@@ -29,6 +29,7 @@ if (WIN32)
     NAMES GLFW/glfw3.h
     PATHS
       $ENV{PROGRAMFILES}/include
+      $ENV{GLFW_ROOT_DIR}/include
       ${GLFW_ROOT_DIR}/include
     DOC "The directory where GLFW/glfw.h resides")
 
@@ -45,6 +46,7 @@ if (WIN32)
     NAMES ${GLFW_LIBRARY_NAME}
     PATHS
       $ENV{PROGRAMFILES}/lib
+      $ENV{GLFW_ROOT_DIR}/lib
       ${GLFW_ROOT_DIR}/lib
     DOC "The GLFW library")
 

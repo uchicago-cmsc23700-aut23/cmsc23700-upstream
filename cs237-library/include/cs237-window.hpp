@@ -32,19 +32,19 @@ struct CreateWindowInfo {
     bool stencil;       ///< do we need stencil-buffer support?
 
     /// constructor
-    /// \param w  window width in pixels
-    /// \param h  window height in pixels
-    /// \param t  window title string
-    /// \param r  boolean flag to specify that the window is resizable
-    /// \param d  boolean flag to specify that the window has a depth buffer
-    /// \param s  boolean flag to specify that the window has a stencil buffer
+    /// \param[in] w  window width in pixels
+    /// \param[in] h  window height in pixels
+    /// \param[in] t  window title string
+    /// \param[in] r  boolean flag to specify that the window is resizable
+    /// \param[in] d  boolean flag to specify that the window has a depth buffer
+    /// \param[in] s  boolean flag to specify that the window has a stencil buffer
     CreateWindowInfo (int w, int h, std::string const &t, bool r, bool d, bool s)
         : wid(w), ht(h), title(t), resizable(r), depth(d), stencil(s)
     { }
 
     /// constructor
-    /// \param w  window width in pixels
-    /// \param h  window height in pixels
+    /// \param[in] w  window width in pixels
+    /// \param[in] h  window height in pixels
     CreateWindowInfo (int w, int h)
         : wid(w), ht(h), title(""), resizable(false), depth(true), stencil(false)
     { }
@@ -154,6 +154,7 @@ protected:
         vk::Extent2D chooseExtent (GLFWwindow *win);
     };
 
+    /// information about the optional depth/stencil buffers for the window
     struct DepthStencilBuffer {
         bool depth;                     ///< true if depth-buffer is supported
         bool stencil;                   ///< true if stencil-buffer is supported
