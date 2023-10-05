@@ -217,9 +217,9 @@ protected:
         /// \brief create a SyncObjs container
         explicit SyncObjs (Window *w)
           : win(w),
-            imageAvailable(VK_NULL_HANDLE),
-            renderFinished(VK_NULL_HANDLE),
-            inFlight(VK_NULL_HANDLE)
+            imageAvailable(nullptr),
+            renderFinished(nullptr),
+            inFlight(nullptr)
         {
             this->allocate();
         }

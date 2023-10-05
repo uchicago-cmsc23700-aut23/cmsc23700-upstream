@@ -563,7 +563,7 @@ vk::ResultValue<uint32_t> Window::SyncObjs::acquireNextImage ()
         this->win->_swap.chain,
         UINT64_MAX,
         this->imageAvailable,
-        VK_NULL_HANDLE);
+        nullptr);
 }
 
 void Window::SyncObjs::reset ()

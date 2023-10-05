@@ -39,7 +39,7 @@ Application::Application (std::vector<std::string> const &args, std::string cons
   : _name(name),
     _messages(vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning),
     _debug(0),
-    _gpu(VK_NULL_HANDLE),
+    _gpu(nullptr),
     _propsCache(nullptr)
 {
     // process the command-line arguments
