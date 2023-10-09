@@ -206,11 +206,17 @@ public:
         this->copyTo(src);
     }
 
-    /// copy indices to the device memory object
+    /// copy the buffer data to the device memory object
     /// \param[in] src  the buffer contents to copy to the Vulkan memory buffer
     void copyTo (UB const &src)
     {
         this->_copyTo(&src, 0, sizeof(UB));
+    }
+
+    /// get the default buffer-descriptor info for this buffer
+    vk::DescriptorBufferInfo descInfo ()
+    {
+        return vk::DescriptorBufferInfo(this->_buf, 0, sizeof(UB));
     }
 
 };
