@@ -40,7 +40,8 @@ Application::Application (std::vector<std::string> const &args, std::string cons
     _messages(vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning),
     _debug(0),
     _gpu(nullptr),
-    _propsCache(nullptr)
+    _propsCache(nullptr),
+    _featuresCache(nullptr)
 {
     // process the command-line arguments
     for (auto it : args) {
