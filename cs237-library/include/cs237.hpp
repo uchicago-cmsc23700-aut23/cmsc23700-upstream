@@ -29,6 +29,7 @@
 /* GLM include files; we include the extensions, such as transforms
  * and enable the experimental support for `to_string`
  */
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include "glm/glm.hpp"
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm/ext.hpp"
