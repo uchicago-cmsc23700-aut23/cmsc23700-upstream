@@ -308,8 +308,7 @@ public:
             vk::CommandBufferLevel::ePrimary,
             1); /* buffer count */
 
-        auto res = this->_device.allocateCommandBuffers(allocInfo);
-        return res[0];
+        return (this->_device.allocateCommandBuffers(allocInfo))[0];
     }
 
     /// \brief begin recording commands in the given command buffer
