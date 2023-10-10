@@ -78,7 +78,7 @@ Application::~Application ()
     }
 
     // delete the command pool
-    this->_device.destroyCommandPool(this->_cmdPool, nullptr);
+    this->_device.destroyCommandPool(this->_cmdPool);
 
     // destroy the logical device
     this->_device.destroy();
