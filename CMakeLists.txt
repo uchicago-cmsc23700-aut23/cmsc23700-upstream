@@ -111,5 +111,8 @@ add_subdirectory(labs EXCLUDE_FROM_ALL)
 
 # the subdirectory for the individual projects
 #
-#add_subdirectory(projects EXCLUDE_FROM_ALL)
+add_subdirectory(projects EXCLUDE_FROM_ALL)
 
+# the subdirectory for the group projects
+#
+#add_subdirectory(group-project EXCLUDE_FROM_ALL)
