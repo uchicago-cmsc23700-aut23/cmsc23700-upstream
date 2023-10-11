@@ -527,6 +527,10 @@ void Window::SwapChain::cleanup ()
 
 void Window::SyncObjs::allocate ()
 {
+    // this method should only be called from the constructor, so the
+    // semaphores and fences should be uninitialized.
+    assert (! this->imageAvailable);
+
     auto device = this->win->device();
 
     vk::SemaphoreCreateInfo semInfo;

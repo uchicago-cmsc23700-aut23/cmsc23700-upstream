@@ -231,7 +231,7 @@ protected:
         /// destroy the objects
         ~SyncObjs ();
 
-        /// allocate the synchronization objects
+        /// helper method for allocating the synchronization objects in the constructor
         void allocate ();
 
         /// \brief acquire the next image from the window's swap chain.

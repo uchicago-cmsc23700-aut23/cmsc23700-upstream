@@ -49,9 +49,6 @@ Proj1Window::Proj1Window (Proj1 *app)
     // create the command buffer
     this->_cmdBuffer = app->newCommandBuf();
 
-    // allocate synchronization objects
-    this->_syncObjs.allocate();
-
     // enable handling of keyboard events
     this->enableKeyEvent (true);
 }
