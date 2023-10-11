@@ -88,7 +88,8 @@ static const std::array<Vertex,8> cubeVertices = {
         Vertex({ -2.0f, -2.0f, -2.0f }, { 0.1f, 0.9f, 0.9f })  // 7
     };
 
-/// the vertex indices of the cube edges; two vertices per edge.
+/// the vertex indices of cube faces; each face consists of two
+/// triangles in counter-clockwise vertex order.
 static const std::array<uint16_t,36> edgeIndices = {
         2, 1, 0, 0, 3, 2,       // front
         6, 5, 4, 4, 7, 6,       // back
@@ -116,6 +117,9 @@ public:
     Lab3Window (Lab3 *app);
 
     ~Lab3Window () override;
+
+    /// reshape the window
+    void reshape (int wid, int ht) override;
 
     /// refresh the window
     void draw () override;
@@ -163,11 +167,8 @@ private:
 Lab3Window::Lab3Window (Lab3 *app)
   : cs237::Window (
         app,
-        // resizable window with depth buffer
-        cs237::CreateWindowInfo(
-            800,
-            600,
-            "", true, true, false)),
+        // resizable window with depth buffer and no stencil
+        cs237::CreateWindowInfo(800, 600, "Lab 3", true, true, false)),
     _syncObjs(this)
 {
     // initialize the camera
@@ -425,6 +426,15 @@ void Lab3Window::draw ()
 
     // set up submission for the presentation queue
     this->_syncObjs.present (this->presentationQ(), idx);
+}
+
+void Lab3Window::reshape (int wid, int ht)
+{
+    // invoke the super-method reshape method
+    this->cs237::Window::reshape(wid, ht);
+
+    // recreate the new framebuffers
+    this->_swap.initFramebuffers (this->_renderPass);
 }
 
 void Lab3Window::key (int key, int scancode, int action, int mods)

@@ -42,11 +42,11 @@ struct CreateWindowInfo {
         : wid(w), ht(h), title(t), resizable(r), depth(d), stencil(s)
     { }
 
-    /// constructor
+    /// simple constructor for fixed-size window without depth or stencil
     /// \param[in] w  window width in pixels
     /// \param[in] h  window height in pixels
     CreateWindowInfo (int w, int h)
-        : wid(w), ht(h), title(""), resizable(false), depth(true), stencil(false)
+        : wid(w), ht(h), title(""), resizable(false), depth(false), stencil(false)
     { }
 
     /// do we need a depth/stencil buffer for the window?
