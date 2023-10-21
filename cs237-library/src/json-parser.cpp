@@ -17,6 +17,7 @@
 
 #include "cs237-config.h"
 #include "json.hpp"
+#include <filesystem>
 #include <iostream>
 #include <fstream>
 #include <cctype>
@@ -90,8 +91,11 @@ class Input {
 Input::Input (std::string filename)
     : _file(filename), _buffer(nullptr), _i(0), _lnum(0), _len(0)
 {
+  // create a generic path that we can normalize the filesystem path for Windows
+    std::filesystem::path fn(filename, std::filesystem::path::generic_format);
+
   // open the json file for reading
-    std::ifstream inS(filename, std::ios::in);
+    std::ifstream inS(fn.native(), std::ios::in);
     if (inS.fail())
         return;
 
