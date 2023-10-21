@@ -21,6 +21,7 @@
 #include <iostream>
 #include <fstream>
 #include <cctype>
+#include <locale>
 #ifdef INCLUDE_STRINGS_H
 #include INCLUDE_STRINGS_H
 #endif
@@ -44,11 +45,11 @@ static int strncasecmp (const char *s1, const char *s2, size_t n)
 
 namespace json {
 
+// a wrapper class around file input that reads the entire file in one go.
 class Input {
   public:
     Input (std::string filename);
     ~Input () { delete this->_buffer; }
-
 
     Input const &operator++ (int _unused) {
         if (this->_buffer[this->_i++] == '\n') this->_lnum++;
@@ -61,10 +62,22 @@ class Input {
     int avail () const { return this->_len - this->_i; }
     bool eof () const { return this->_i >= this->_len; }
 
+    /// get the filename as a std::string
+    std::string filename () const
+    {
+#ifdef CS237_WINDOWS
+/* FIXME: on windows the native path is a UTF16 std::wstring, so we should
+ * be converting it to UTF8, but for now we just use the C string representation.
+ */
+        return std::string(this->_path.native().c_str());
+#else
+        return this->_path.native();
+#endif
+    }
+
     void error (std::string msg)
     {
-#ifndef NDEBUG
-        std::cerr << "json::parseFile(" << this->_file << "): " << msg
+        std::cerr << "json::parseFile(" << this->filename() << "): " << msg
             << " at line " << this->_lnum << std::endl;
         std::cerr << "    input = \"";
         int n = this->avail();
@@ -76,11 +89,10 @@ class Input {
                 std::cerr << ".";
         }
         std::cerr << " ...\n" << std::endl;
-#endif
     }
 
   private:
-    std::string _file;
+    std::filesystem::path _path;
     char        *_buffer;
     int         _i;     // character index
     int         _lnum;  // current line number
@@ -89,22 +101,19 @@ class Input {
 };
 
 Input::Input (std::string filename)
-    : _file(filename), _buffer(nullptr), _i(0), _lnum(0), _len(0)
+  : _path(filename, std::filesystem::path::generic_format),
+    _buffer(nullptr), _i(0), _lnum(0), _len(0)
 {
-  // create a generic path that we can normalize the filesystem path for Windows
-    std::filesystem::path fn(filename, std::filesystem::path::generic_format);
+    // figure out the size of the file
+    auto length = std::filesystem::file_size(this->_path);
 
-  // open the json file for reading
-    std::ifstream inS(fn.c_str(), std::ios::in);
-    if (inS.fail())
+    // open the json file for reading
+    std::ifstream inS(this->_path.c_str(), std::ios::in);
+    if (inS.fail()) {
         return;
+    }
 
-  // figure out the size of the file
-    inS.seekg (0, inS.end);
-    int length = inS.tellg();
-    inS.seekg (0, inS.beg);
-
-  // read length bytes
+    // read length bytes
     this->_lnum = 1;
     this->_buffer = new char[length];
     inS.read (this->_buffer, length);
@@ -128,9 +137,7 @@ Value *parseFile (std::string filename)
   // open the json file for reading
     Input datap(filename);
     if (datap.eof()) {
-#ifndef NDEBUG
         std::cerr << "json::parseFile: unable to read \"" << filename << "\"" << std::endl;
-#endif
         return nullptr;
     }
 

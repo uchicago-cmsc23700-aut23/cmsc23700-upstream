@@ -29,6 +29,9 @@ extern "C" {
 //! is strncasecmp available?
 #cmakedefine HAVE_STRNCASECMP
 
+//! flag for windows build
+#cmakedefine CS237_WINDOWS
+
 #ifdef __cplusplus
 }
 #endif // C++

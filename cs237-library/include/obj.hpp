@@ -69,7 +69,7 @@ struct Material {
 /// by per-vertex data (position, normal, and texture coordinate) and an index
 /// array that defines a list of triangles.
 struct Group {
-    std::string         name;           ///< name of this group */
+    std::string         name;           ///< name of this group
     int                 material;       ///< index to material for group (-1 for no material)
     uint32_t            nVerts;         ///< the number of vertices in this group.
     uint32_t            nIndices;       ///< the number of indices (3 * number of triangles)

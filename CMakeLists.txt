@@ -24,6 +24,10 @@ ERROR: builds in the source tree are not allowed.
 ")
 endif()
 
+if (WIN32)
+  set(CS237_WINDOWS ON)
+endif()
+
 if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   message(STATUS "No build type selected, default to Debug")
   set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type (default Debug)" FORCE)
