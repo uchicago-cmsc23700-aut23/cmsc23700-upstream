@@ -95,7 +95,7 @@ Input::Input (std::string filename)
     std::filesystem::path fn(filename, std::filesystem::path::generic_format);
 
   // open the json file for reading
-    std::ifstream inS(fn.native(), std::ios::in);
+    std::ifstream inS(fn.c_str(), std::ios::in);
     if (inS.fail())
         return;
 
