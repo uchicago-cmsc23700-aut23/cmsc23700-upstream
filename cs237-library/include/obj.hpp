@@ -90,17 +90,17 @@ class Model {
     ~Model ();
 
   /// the model's axis-aligned bounding box
-    const cs237::AABBf &BBox () const { return this->_bbox; }
+    const cs237::AABBf &bounds () const { return this->_bbox; }
 
   /// the number of materials associated with this model
-    int NumMaterials () const { return this->_materials.size(); }
+    int numMaterials () const { return this->_materials.size(); }
   /// get a material
-    const OBJ::Material & Material (int i) const { return this->_materials[i]; }
+    const OBJ::Material & material (int i) const { return this->_materials[i]; }
 
   /// the number of groups in this model
-    int NumGroups () const { return this->_groups.size(); }
+    int numGroups () const { return this->_groups.size(); }
   /// get a group by index
-    const OBJ::Group & Group (int i) const { return this->_groups[i]; }
+    const OBJ::Group & group (int i) const { return this->_groups[i]; }
   /// iterator for looping over the groups in the model
     std::vector<OBJ::Group>::const_iterator beginGroups () const { return this->_groups.begin(); }
   /// terminator for looping over the groups in the model

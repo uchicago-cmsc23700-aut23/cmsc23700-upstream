@@ -21,7 +21,7 @@ static std::vector<char> _readFile (std::string const &name)
     std::ifstream file(name, std::ios::ate | std::ios::binary);
 
     if (!file.is_open()) {
-        ERROR("unable to open shader file!");
+        ERROR("unable to open shader file \"" + name + "\"!");
     }
 
     // determine the file size; note that the current position is at the *end* of the file.
