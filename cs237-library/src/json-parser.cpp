@@ -65,14 +65,7 @@ class Input {
     /// get the filename as a std::string
     std::string filename () const
     {
-#ifdef CS237_WINDOWS
-/* FIXME: on windows the native path is a UTF16 std::wstring, so we should
- * be converting it to UTF8, but for now we just use the C string representation.
- */
-        return std::string(this->_path.native().c_str());
-#else
-        return this->_path.native();
-#endif
+        return this->_path.string();
     }
 
     void error (std::string msg)
@@ -118,11 +111,15 @@ Input::Input (std::string filename)
     this->_buffer = new char[length];
     inS.read (this->_buffer, length);
 
+// it has been reported that inS.fail() is true on Windows even if the read was
+// successful, so we skip the check for now.
+#ifndef CS237_WINDOWS
     if (inS.fail()) {
         delete this->_buffer;
         this->_buffer = 0;
         return;
     }
+#endif
 
     this->_len = length;
 }
