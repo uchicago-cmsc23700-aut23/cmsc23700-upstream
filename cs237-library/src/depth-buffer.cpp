@@ -26,7 +26,7 @@ DepthBuffer::DepthBuffer (Application *app, uint32_t wid, uint32_t ht)
         vk::SamplerAddressMode::eClampToEdge,   // addressing mode for U coordinates
         vk::SamplerAddressMode::eClampToEdge,   // addressing mode for V coordinates
         vk::BorderColor::eFloatOpaqueBlack);    // border color
-    this->_sampler = this->_app->createSampler (samplerInfo);
+    this->_sampler = this->_app->createDepthSampler (samplerInfo);
 
 /* TODO: should check device properties to verify that the format works */
 

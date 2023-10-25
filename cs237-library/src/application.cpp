@@ -572,7 +572,30 @@ vk::Sampler Application::createSampler (Application::SamplerInfo const &info)
         vk::CompareOp::eNever, /* compare op */
         0, /* min LOD */
         0, /* max LOD */
-        vk::BorderColor::eFloatTransparentBlack, /* borderColor */
+        info.borderColor, /* borderColor */
+        VK_FALSE); /* unnormalized coordinates */
+
+    return this->_device.createSampler(samplerInfo);
+}
+
+vk::Sampler Application::createDepthSampler (SamplerInfo const &info)
+{
+    vk::SamplerCreateInfo samplerInfo(
+        {}, /* flags */
+        info.magFilter,
+        info.minFilter,
+        info.mipmapMode,
+        info.addressModeU,
+        info.addressModeV,
+        info.addressModeW,
+        0.0, /* mip LOD bias */
+        VK_TRUE, /* anisotropy enable */
+        this->limits()->maxSamplerAnisotropy,
+        VK_TRUE, /* compare enable */
+        vk::CompareOp::eLessOrEqual, /* compare op */
+        0, /* min LOD */
+        0, /* max LOD */
+        info.borderColor, /* borderColor */
         VK_FALSE); /* unnormalized coordinates */
 
     return this->_device.createSampler(samplerInfo);
