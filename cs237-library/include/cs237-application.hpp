@@ -13,7 +13,6 @@
 #ifndef _CS237_APPLICATION_HPP_
 #define _CS237_APPLICATION_HPP_
 
-#include "vulkan/vulkan.hpp"
 #ifndef _CS237_HPP_
 #error "cs237-application.hpp should not be included directly"
 #endif
@@ -31,6 +30,7 @@ friend class MemoryObj;
 friend class __detail::TextureBase;
 friend class Texture1D;
 friend class Texture2D;
+friend class DepthBuffer;
 
 public:
 

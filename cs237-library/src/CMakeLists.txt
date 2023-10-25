@@ -11,6 +11,7 @@
 set(SRCS
   aabb.cpp
   application.cpp
+  depth-buffer.cpp
   image.cpp
   json.cpp
   json-parser.cpp

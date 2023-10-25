@@ -1,0 +1,71 @@
+/*! \file cs237-depth-buffer.hpp
+ *
+ * Support code for CMSC 23700 Autumn 2023.
+ *
+ * \author John Reppy
+ */
+
+/*
+ * COPYRIGHT (c) 2023 John Reppy (http://cs.uchicago.edu/~jhr)
+ * All rights reserved.
+ */
+
+#ifndef _CS237_DEPTH_BUFFER_HPP_
+#define _CS237_DEPTH_BUFFER_HPP_
+
+#ifndef _CS237_HPP_
+#error "cs237-depth-buffer.hpp should not be included directly"
+#endif
+
+namespace cs237 {
+
+/// This class is a wrapper around the
+class DepthBuffer {
+public:
+
+    /// \brief construct and initialize a new depth buffer of the give size
+    /// \param app  the owning application
+    /// \param wid  the width of the buffer (should be power of 2)
+    /// \param ht   the height of the buffer (should be power of 2)
+    /// \return the new buffer
+    ///
+    /// This function allocates and initializes a frame-buffer object
+    /// and associated image.  The texture is initialized with the
+    /// following parameters:
+    ///   - the filter parameters are set to `VK_FILTER_LINEAR`
+    ///   - the mimap mode is `VK_SAMPLER_MIPMAP_MODE_NEAREST`
+    ///   - the address modes are set to `VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE`
+    ///   - the texture mode is set to \c GL_INTENSITY
+    ///   - the texture compare mode is set to \c GL_COMPARE_R_TO_TEXTURE
+    ///   - the texture compare function is set to \c GL_LEQUAL
+    //
+    DepthBuffer (Application *app, uint32_t wid, uint32_t ht);
+
+    /// destructor; this will free the underlying resources
+    ~DepthBuffer ();
+
+    /// get the width of the buffer
+    uint32_t width() const { return this->_wid; }
+
+    /// get the height of the buffer
+    uint32_t height() const { return this->_ht; }
+
+    /// create a framebuffer that writes to the depth-buffer image.
+    /// \param rp  the render pass used to render to the framebuffer
+    /// \return the framebuffer for the depth buffer
+    vk::Framebuffer createFramebuffer (vk::RenderPass rp);
+
+private:
+    uint32_t _wid;
+    uint32_t _ht;
+    Application *_app;          ///< the application
+    vk::Image _image;
+    vk::ImageView _imageView;
+    vk::DeviceMemory _mem;      ///< the device memory object
+    vk::Sampler _sampler;       ///< sampler for reading from image
+
+};
+
+} // namespace cs237
+
+#endif // !_CS237_DEPTH_BUFFER_HPP_
