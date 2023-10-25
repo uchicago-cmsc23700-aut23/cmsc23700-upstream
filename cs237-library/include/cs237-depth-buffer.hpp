@@ -27,17 +27,13 @@ public:
     /// \param app  the owning application
     /// \param wid  the width of the buffer (should be power of 2)
     /// \param ht   the height of the buffer (should be power of 2)
-    /// \return the new buffer
     ///
     /// This function allocates and initializes a frame-buffer object
-    /// and associated image.  The texture is initialized with the
+    /// and associated sampler.  The sampler is initialized with the
     /// following parameters:
     ///   - the filter parameters are set to `VK_FILTER_LINEAR`
     ///   - the mimap mode is `VK_SAMPLER_MIPMAP_MODE_NEAREST`
     ///   - the address modes are set to `VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE`
-    ///   - the texture mode is set to \c GL_INTENSITY
-    ///   - the texture compare mode is set to \c GL_COMPARE_R_TO_TEXTURE
-    ///   - the texture compare function is set to \c GL_LEQUAL
     //
     DepthBuffer (Application *app, uint32_t wid, uint32_t ht);
 
@@ -50,6 +46,15 @@ public:
     /// get the height of the buffer
     uint32_t height() const { return this->_ht; }
 
+    /// get the depth-buffer image format
+    vk::Format format() const { return this->_fmt; }
+
+    /// get the sampler
+    vk::Sampler sampler() const { return this->_sampler; }
+
+    /// get the image view for the depth buffer
+    vk::ImageView imageView() const { return this->_imageView; }
+
     /// create a framebuffer that writes to the depth-buffer image.
     /// \param rp  the render pass used to render to the framebuffer
     /// \return the framebuffer for the depth buffer
@@ -59,6 +64,7 @@ private:
     uint32_t _wid;
     uint32_t _ht;
     Application *_app;          ///< the application
+    vk::Format _fmt;            ///< the format of the depth buffer
     vk::Image _image;
     vk::ImageView _imageView;
     vk::DeviceMemory _mem;      ///< the device memory object

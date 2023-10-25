@@ -31,12 +31,12 @@ DepthBuffer::DepthBuffer (Application *app, uint32_t wid, uint32_t ht)
 /* TODO: should check device properties to verify that the format works */
 
 /* FIXME: should check to see if we can use eD32Sfloat for the format */
-    auto depthFormat = vk::Format::eD16Unorm;
+    this->_fmt = vk::Format::eD16Unorm;
 
     // create the image
     this->_image = app->_createImage (
         wid, ht,
-        depthFormat,
+        this->_fmt,
         vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eDepthStencilAttachment
             | vk::ImageUsageFlagBits::eSampled,
@@ -50,7 +50,7 @@ DepthBuffer::DepthBuffer (Application *app, uint32_t wid, uint32_t ht)
     // create the image view
     this->_imageView = app->_createImageView(
         this->_image,
-        depthFormat,
+        this->_fmt,
         vk::ImageAspectFlagBits::eDepth);
 
 }
