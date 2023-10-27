@@ -55,6 +55,15 @@ public:
     /// get the image view for the depth buffer
     vk::ImageView imageView() const { return this->_imageView; }
 
+    /// get the image information for the depth buffer
+    vk::DescriptorImageInfo imageInfo() const
+    {
+        return vk::DescriptorImageInfo(
+            this->_sampler,
+            this->_imageView,
+            vk::ImageLayout::eShaderReadOnlyOptimal);
+    }
+
     /// create a framebuffer that writes to the depth-buffer image.
     /// \param rp  the render pass used to render to the framebuffer
     /// \return the framebuffer for the depth buffer

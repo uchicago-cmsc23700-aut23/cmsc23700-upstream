@@ -125,6 +125,11 @@ public:
     /// \return the created sampler
     vk::Sampler createSampler (SamplerInfo const &info);
 
+    /// \brief Create a depth-texture sampler as specified
+    /// \param info  a simplified sampler specification
+    /// \return the created depth-texture sampler
+    vk::Sampler createDepthSampler (SamplerInfo const &info);
+
     /// \brief get the logical device
     vk::Device device () const { return this->_device; }
 

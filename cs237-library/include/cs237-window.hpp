@@ -317,7 +317,7 @@ protected:
                 0.0f,
                 float(this->_swap.extent.width),
                 float(this->_swap.extent.width),
-                float(-this->_swap.extent.height),
+                -float(this->_swap.extent.height),
                 0.0f, /* min depth */
                 1.0f);
         } else {
@@ -359,7 +359,7 @@ protected:
              */
             this->_setViewportCmd(cmdBuf,
                 0, this->_swap.extent.height,
-                this->_swap.extent.width, -this->_swap.extent.height);
+                this->_swap.extent.width, -(int32_t)this->_swap.extent.height);
         } else {
             this->_setViewportCmd(cmdBuf,
                 0, 0,
