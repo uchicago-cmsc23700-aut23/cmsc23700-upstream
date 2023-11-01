@@ -318,6 +318,15 @@ void Lab5Window::_initDescriptorSetLayouts ()
 
     // create the descriptor-set layout for the depth-buffer sampler
     {
+        vk::DescriptorSetLayoutBinding layoutBinding(
+            0, /* binding */
+            vk::DescriptorType::eCombinedImageSampler, /* descriptor type */
+            1, /* descriptor count */
+            vk::ShaderStageFlagBits::eFragment, /* stages */
+            nullptr); /* immutable samplers */
+
+        vk::DescriptorSetLayoutCreateInfo layoutInfo({}, layoutBinding);
+        this->_depthDSLayout = this->device().createDescriptorSetLayout(layoutInfo);
     }
 }
 
