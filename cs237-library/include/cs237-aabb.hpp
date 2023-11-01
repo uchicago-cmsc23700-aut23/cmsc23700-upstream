@@ -23,7 +23,7 @@ namespace cs237 {
 
 namespace __detail {
 
-//! Axis-Aligned Bounding Box
+//! Axis-Aligned Bounding Box parameterized over the scalar type
 template <typename T>
 struct AABB {
     using vec3 = glm::vec<3, T, glm::defaultp>;
@@ -36,13 +36,13 @@ struct AABB {
     AABB (vec3 const &pt) : _min(pt), _max(pt), _empty(false) {}
     AABB (vec3 const &min, vec3 const &max) : _min(min), _max(max), _empty(false) {}
 
-  //! is the box empty
+    //! is the box empty
     bool isEmpty () const { return this->_empty; }
 
-  //! clear the box (i.e., make it empty)
+    //! clear the box (i.e., make it empty)
     void clear () { this->_empty = true; }
 
-  //! is a point inside the box?
+    //! is a point inside the box?
     bool includesPt (vec3 const &pt) const
     {
         return (! this->_empty)
@@ -51,7 +51,7 @@ struct AABB {
             && (this->_min.z <= pt.z) && (pt.z <= this->_max.z);
     }
 
-  //! distance to a point; will be 0.0 if the point is inside the box
+    //! distance to a point; will be 0.0 if the point is inside the box
     T distanceToPt (vec3 const &pt) const
     {
 #define DELTA(A)							\
@@ -68,7 +68,7 @@ struct AABB {
 #undef DELTA
     }
 
-  //! extend this box as necessary to include the point
+    //! extend this box as necessary to include the point
     void addPt (vec3 const &pt)
     {
         if (this->_empty) {
@@ -84,17 +84,13 @@ struct AABB {
         else if (this->_max.z < pt.z) this->_max.z = pt.z;
     }
 
-  //! merge the bounding box into this bounding box
-  //! \param bb the bounding box to merge into this box
+    //! merge the bounding box into this bounding box
+    //! \param bb the bounding box to merge into this box
     AABB & operator+= (AABB const &bb)
     {
         if ((! this->_empty) && (! bb._empty)) {
-            this->_min.x = MIN(this->_min.x, bb._min.x);
-            this->_min.y = MIN(this->_min.y, bb._min.y);
-            this->_min.z = MIN(this->_min.z, bb._min.z);
-            this->_max.x = MAX(this->_max.x, bb._max.x);
-            this->_max.y = MAX(this->_max.y, bb._max.y);
-            this->_max.z = MAX(this->_max.z, bb._max.z);
+            this->_min = glm::min(this->_min, bb._min);
+            this->_max = glm::min(this->_max, bb._max);
         }
         else if (this->_empty) {
             this->_empty = false;
@@ -105,8 +101,8 @@ struct AABB {
         return *this;
     }
 
-  //! extend this box as necessary to include the point
-  //! \param pt the point to include in this box
+    //! extend this box as necessary to include the point
+    //! \param pt the point to include in this box
     AABB & operator+= (vec3 const &pt)
     {
         this->addPt (pt);
@@ -115,66 +111,66 @@ struct AABB {
 
   /***** Warning: the following functions are undefined on empty boxes! *****/
 
-  //! minimum extents of the box
+    //! minimum extents of the box
     vec3 const & min() const
     {
         assert (! this->_empty);
         return this->_min;
     }
 
-  //! maximum extents of the box
+    //! maximum extents of the box
     vec3 const & max() const
     {
         assert (! this->_empty);
         return this->_max;
     }
 
-  //! center of the box
+    //! center of the box
     vec3 center () const
     {
         assert (! this->_empty);
         return T(0.5) * (this->_min + this->_max);
     }
 
-  //! minimum X-coordinate of the box
+    //! minimum X-coordinate of the box
     T minX () const
     {
         assert (! this->_empty);
         return this->_min.x;
     }
-  //! minimum Y-coordinate of the box
+    //! minimum Y-coordinate of the box
     T minY () const
     {
         assert (! this->_empty);
         return this->_min.y;
     }
-  //! minimum Z-coordinate of the box
+    //! minimum Z-coordinate of the box
     T minZ () const
     {
         assert (! this->_empty);
         return this->_min.z;
     }
-  //! maximum X-coordinate of the box
+    //! maximum X-coordinate of the box
     T maxX () const
     {
         assert (! this->_empty);
         return this->_max.x;
     }
-  //! maximum Y-coordinate of the box
+    //! maximum Y-coordinate of the box
     T maxY () const
     {
         assert (! this->_empty);
         return this->_max.y;
     }
-  //! maximum Z-coordinate of the box
+    //! maximum Z-coordinate of the box
     T maxZ () const
     {
         assert (! this->_empty);
         return this->_max.z;
     }
 
-  //! return the coordinates of the i'th corner of the box, where
-  //! _min is corner 0 and _max is corner 7.
+    //! return the coordinates of the i'th corner of the box, where
+    //! _min is corner 0 and _max is corner 7.
     vec3 corner (int i) const
     {
         assert (! this->_empty);
@@ -183,6 +179,21 @@ struct AABB {
             (i & 4) ? this->_max.x : this->_min.x,
             (i & 2) ? this->_max.y : this->_min.y,
             (i & 1) ? this->_max.z : this->_min.z);
+    }
+
+    /// return an array of the corners of the box
+    std::array<vec3,8> corners () const
+    {
+        return std::array<vec3,8>{
+                vec3(this->_min.x, this->_min.y, this->_min.z),
+                vec3(this->_min.x, this->_min.y, this->_max.z),
+                vec3(this->_min.x, this->_max.y, this->_min.z),
+                vec3(this->_min.x, this->_max.y, this->_max.z),
+                vec3(this->_max.x, this->_min.y, this->_min.z),
+                vec3(this->_max.x, this->_min.y, this->_max.z),
+                vec3(this->_max.x, this->_max.y, this->_min.z),
+                vec3(this->_max.x, this->_max.y, this->_max.z)
+            };
     }
 };
 
@@ -210,9 +221,9 @@ inline AABB<T> operator+ (AABB<T> const &bb1, AABB<T> &bb2)
 } // namespace __detail
 
 //! Single-precision axis-aligned bounding boxes
-typedef __detail::AABB<float> AABBf;
+using AABBf_t = __detail::AABB<float>;
 //! Double-precision axis-aligned bounding boxes
-typedef __detail::AABB<double> AABBd;
+using AABBd_t = __detail::AABB<double>;
 
 } //namespace cs237
 

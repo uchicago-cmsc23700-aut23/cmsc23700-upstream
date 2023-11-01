@@ -454,6 +454,7 @@ protected:
     /// \param format   the pixel format for the image
     /// \param tiling   the tiling method for the pixels (device optimal vs linear)
     /// \param usage    flags specifying the usage of the image
+    /// \param layout   the image layout
     /// \param mipLvls  number of mipmap levels for the image (default = 1)
     /// \return the created image
     vk::Image _createImage (
@@ -462,7 +463,31 @@ protected:
         vk::Format format,
         vk::ImageTiling tiling,
         vk::ImageUsageFlags usage,
+        vk::ImageLayout layout,
         uint32_t mipLvls = 1);
+
+    /// \brief A helper function for creating a Vulkan image that can be used for
+    ///        textures or depth buffers
+    /// \param wid      the image width
+    /// \param ht       the image height
+    /// \param format   the pixel format for the image
+    /// \param tiling   the tiling method for the pixels (device optimal vs linear)
+    /// \param usage    flags specifying the usage of the image
+    /// \param mipLvls  number of mipmap levels for the image
+    /// \return the created image
+    vk::Image _createImage (
+        uint32_t wid,
+        uint32_t ht,
+        vk::Format format,
+        vk::ImageTiling tiling,
+        vk::ImageUsageFlags usage,
+        uint32_t mipLvls = 1)
+    {
+        return this->_createImage (
+            wid, ht, format, tiling, usage,
+            vk::ImageLayout::eUndefined,
+            mipLvls);
+    }
 
     /// \brief A helper function for allocating and binding device memory for an image
     /// \param img    the image to allocate memory for

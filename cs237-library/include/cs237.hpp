@@ -70,6 +70,9 @@ inline void ReportError (const char *file, int line, std::string const &msg)
 #include "cs237-image.hpp"
 #include "cs237-texture.hpp"
 #include "cs237-depth-buffer.hpp"
+
+/* geometric types */
 #include "cs237-aabb.hpp"
+#include "cs237-plane.hpp"
 
 #endif // !_CS237_HPP_

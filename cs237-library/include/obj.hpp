@@ -90,7 +90,7 @@ class Model {
     ~Model ();
 
   /// the model's axis-aligned bounding box
-    const cs237::AABBf &bounds () const { return this->_bbox; }
+    const cs237::AABBf_t &bounds () const { return this->_bbox; }
 
   /// the number of materials associated with this model
     int numMaterials () const { return this->_materials.size(); }
@@ -109,7 +109,7 @@ class Model {
   private:
     std::string         _path;          ///< path to the obj file that this model came from
     std::string         _mtlLibName;    ///< name of the material library for this model
-    cs237::AABBf        _bbox;          ///< bounding box for model
+    cs237::AABBf_t      _bbox;          ///< bounding box for model
 
     std::vector<OBJ::Material> _materials;
     std::vector<OBJ::Group> _groups;

@@ -364,6 +364,7 @@ vk::Image Application::_createImage (
     vk::Format format,
     vk::ImageTiling tiling,
     vk::ImageUsageFlags usage,
+    vk::ImageLayout layout,
     uint32_t mipLvls)
 {
     vk::ImageCreateInfo imageInfo(
@@ -378,7 +379,7 @@ vk::Image Application::_createImage (
         usage,
         vk::SharingMode::eExclusive, /* sharing mode */
         {},
-        vk::ImageLayout::eUndefined);
+        layout);
 
     return this->_device.createImage(imageInfo);
 }
@@ -591,8 +592,11 @@ vk::Sampler Application::createDepthSampler (SamplerInfo const &info)
         0.0, /* mip LOD bias */
         VK_TRUE, /* anisotropy enable */
         this->limits()->maxSamplerAnisotropy,
-        VK_TRUE, /* compare enable */
-        vk::CompareOp::eLessOrEqual, /* compare op */
+/* FIXME: need VkPhysicalDevicePortabilitySubsetFeaturesKHR::mutableComparisonSamplers
+        VK_TRUE, vk::CompareOp::eLessOrEqual,
+*/
+        VK_FALSE, /* compare enable */
+        vk::CompareOp::eAlways, /* compare op */
         0, /* min LOD */
         0, /* max LOD */
         info.borderColor, /* borderColor */
@@ -672,19 +676,19 @@ vk::Pipeline Application::createPipeline (
     vk::GraphicsPipelineCreateInfo pipelineInfo(
         {}, /* flags */
         shaders->stages(), /* stages */
-	&vertexInfo, /* vertex-input state */
-	&asmInfo, /* input-assembly state */
+        &vertexInfo, /* vertex-input state */
+        &asmInfo, /* input-assembly state */
         {}, /* tesselation state */
-	&viewportState, /* viewport state */
-	&rasterizer, /* rasterization state */
-	&multisampling, /* multisample state */
+        &viewportState, /* viewport state */
+        &rasterizer, /* rasterization state */
+        &multisampling, /* multisample state */
         &depthStencil, /* depth-stencil state */
-	&colorBlending, /* color-blend state */
-	&dynamicState, /* dynamic state */
-	layout, /* layout */
-	renderPass, /* render pass */
-	0, /* subpass */
-	nullptr); /* base pipeline */
+        &colorBlending, /* color-blend state */
+        &dynamicState, /* dynamic state */
+        layout, /* layout */
+        renderPass, /* render pass */
+        0, /* subpass */
+        nullptr); /* base pipeline */
 
     // create the pipeline
     auto pipes = this->device().createGraphicsPipelines(

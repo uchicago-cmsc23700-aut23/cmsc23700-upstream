@@ -22,10 +22,10 @@ DepthBuffer::DepthBuffer (Application *app, uint32_t wid, uint32_t ht)
     cs237::Application::SamplerInfo samplerInfo(
         vk::Filter::eLinear,                    // magnification filter
         vk::Filter::eLinear,                    // minification filter
-        vk::SamplerMipmapMode::eNearest,        // mipmap mode
+        vk::SamplerMipmapMode::eLinear,        // mipmap mode
         vk::SamplerAddressMode::eClampToEdge,   // addressing mode for U coordinates
         vk::SamplerAddressMode::eClampToEdge,   // addressing mode for V coordinates
-        vk::BorderColor::eFloatOpaqueBlack);    // border color
+        vk::BorderColor::eFloatOpaqueWhite);    // border color (white is max depth)
     this->_sampler = this->_app->createDepthSampler (samplerInfo);
 
 /* TODO: should check device properties to verify that the format works */
@@ -39,8 +39,7 @@ DepthBuffer::DepthBuffer (Application *app, uint32_t wid, uint32_t ht)
         this->_fmt,
         vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eDepthStencilAttachment
-            | vk::ImageUsageFlagBits::eSampled,
-        1);
+            | vk::ImageUsageFlagBits::eSampled);
 
     // allocate and bind the memory object
     this->_mem = app->_allocImageMemory (

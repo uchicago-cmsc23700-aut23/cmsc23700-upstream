@@ -19,9 +19,9 @@ set(SRCS
   mtl-reader.cpp
   obj-reader.cpp
   obj.cpp
-  window.cpp
   shader.cpp
-  texture.cpp)
+  texture.cpp
+  window.cpp)
 
 add_library(cs237
   STATIC
