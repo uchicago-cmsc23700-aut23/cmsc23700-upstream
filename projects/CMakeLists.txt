@@ -10,3 +10,4 @@
 
 add_subdirectory(proj1 EXCLUDE_FROM_ALL)
 add_subdirectory(proj2 EXCLUDE_FROM_ALL)
+add_subdirectory(proj3 EXCLUDE_FROM_ALL)
